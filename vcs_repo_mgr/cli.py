@@ -12,6 +12,7 @@ Supported options:
   -r, --repository=NAME       name of configured repository
       --rev, --revision=REV   revision to export (used in combination
                               with the options -n, -i and -e)
+  -d, --find-directory        print the absolute path of the local repository
   -n, --find-revision-number  find the local revision number of the revision
                               given with --rev
   -i, --find-revision-id      find the global revision id of the revision
@@ -65,9 +66,10 @@ def main():
     actions = []
     # Parse the command line arguments.
     try:
-        options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:niue:vh', [
-            'repository=', 'rev=', 'revision=', 'find-revision-number',
-            'find-revision-id', 'update', 'export=', 'verbose', 'help'
+        options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:dniue:vh', [
+            'repository=', 'rev=', 'revision=', 'find-directory',
+            'find-revision-number', 'find-revision-id', 'update', 'export=',
+            'verbose', 'help'
         ])
         for option, value in options:
             if option in ('-r', '--repository'):
@@ -76,6 +78,10 @@ def main():
                 repository = find_configured_repository(name)
             elif option in ('--rev', '--revision'):
                 revision = value.strip()
+                assert revision, "Please specify a nonempty revision string!"
+            elif option in ('-d', '--find-directory'):
+                assert repository, "Please specify a repository first!"
+                actions.append(functools.partial(print_directory, repository))
             elif option in ('-n', '--find-revision-number'):
                 assert repository, "Please specify a repository first!"
                 actions.append(functools.partial(print_revision_number, repository, revision))
@@ -110,6 +116,9 @@ def main():
     except Exception, e:
         logger.exception("Failed to execute requested action(s)!")
         sys.exit(1)
+
+def print_directory(repository):
+    print repository.local
 
 def print_revision_number(repository, revision):
     print repository.find_revision_number(revision)
