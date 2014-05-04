@@ -9,11 +9,46 @@ repositories are supported.
 Usage
 -----
 
-To get started you have to install the package and create a configuration file:
+To get started you have to install the package:
 
   .. code-block:: sh
 
      peter@macbook> pip install vcs-repo-mgr
+
+This installs the ``vcs-tool`` command:
+
+  .. code-block:: sh
+
+     peter@macbook> vcs-tool --help
+     Usage: vcs-tool [OPTIONS]
+
+     Supported options:
+
+       -r, --repository=NAME       name of configured repository
+           --rev, --revision=REV   revision to export (used in combination
+                                   with the options -n, -i and -e)
+       -d, --find-directory        print the absolute path of the local repository
+       -n, --find-revision-number  find the local revision number of the revision
+                                   given with --rev
+       -i, --find-revision-id      find the global revision id of the revision
+                                   given with --rev
+       -u, --update                update local clone of repository by
+                                   pulling latest changes from remote
+                                   repository
+       -e, --export=DIR            export contents of repository to
+                                   directory (used in combination
+                                   with --revision)
+       -v, --verbose               make more noise
+       -h, --help                  show this message and exit
+
+     The value of --revision defaults to `master' for git repositories and `default'
+     for Mercurial repositories.
+
+Before you can use the ``vcs-tool`` command you have to create a configuration
+file:
+
+  .. code-block:: sh
+
      peter@macbook> cat > ~/.vcs-repo-mgr.ini << EOF
      [coloredlogs]
      type = git
@@ -132,7 +167,7 @@ This software is licensed under the `MIT license`_.
 .. _GitHub: https://github.com/xolox/python-vcs-repo-mgr
 .. _Mercurial: http://mercurial.selenic.com/
 .. _MIT license: http://en.wikipedia.org/wiki/MIT_License
-.. _online documentation: https://vcs-repo-mgr.readthedocs.org
+.. _online documentation: https://vcs-repo-mgr.readthedocs.org/en/latest/#function-reference
 .. _peter@peterodding.com: peter@peterodding.com
 .. _PyPi: https://pypi.python.org/pypi/vcs-repo-mgr
 .. _version control: http://en.wikipedia.org/wiki/Revision_control
