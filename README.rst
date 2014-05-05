@@ -15,7 +15,15 @@ To get started you have to install the package:
 
      peter@macbook> pip install vcs-repo-mgr
 
-This installs the ``vcs-tool`` command:
+You will also need Mercurial_ and/or Git_ installed (depending on the type
+of repositories you want to work with). Here's how you install them on
+Debian/Ubuntu:
+
+  .. code-block:: sh
+
+     peter@macbook> sudo apt-get install mercurial git-core
+
+You now have the ``vcs-tool`` command available:
 
   .. code-block:: sh
 
