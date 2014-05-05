@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 # Standard library modules.
 import ConfigParser
