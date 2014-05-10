@@ -4,6 +4,9 @@ vcs-repo-mgr: Version control repository manager
 .. image:: https://travis-ci.org/xolox/python-vcs-repo-mgr.svg?branch=master
    :target: https://travis-ci.org/xolox/python-vcs-repo-mgr
 
+.. image:: https://coveralls.io/repos/xolox/python-vcs-repo-mgr/badge.png?branch=master
+   :target: https://coveralls.io/r/xolox/python-vcs-repo-mgr?branch=master
+
 The Python package ``vcs-repo-mgr`` provides a command line program and Python
 API to perform common operations (in the context of packaging/deployment) on
 `version control`_ repositories. It's currently tested on Python 2.6, 2.7 and
