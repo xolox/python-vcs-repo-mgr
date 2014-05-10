@@ -6,6 +6,7 @@
 
 # Standard library modules.
 import logging
+import os
 import shutil
 import tempfile
 import unittest
@@ -23,10 +24,12 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         coloredlogs.set_level(logging.DEBUG)
         self.git_directory = tempfile.mkdtemp()
         self.hg_directory = tempfile.mkdtemp()
+        self.export_directory = tempfile.mkdtemp()
 
     def tearDown(self):
         shutil.rmtree(self.git_directory)
         shutil.rmtree(self.hg_directory)
+        shutil.rmtree(self.export_directory)
 
     def test_git_repo(self):
         self.repo_test_helper(repo=GitRepo(local=self.git_directory,
@@ -52,9 +55,20 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test repository.update().
         repo.update()
 
+        # Test repository.__repr__().
+        self.assertTrue(isinstance(repr(repo), str))
+
         # Test repository branches.
         self.assertEqual(len(repo.branches), 1)
         self.assertTrue(main_branch in repo.branches)
+
+        # Test repository export.
+        repo.export(self.export_directory)
+        num_files = 0
+        for root, dirs, files in os.walk(self.export_directory):
+            num_files += len(files)
+        self.assertTrue(num_files > 0)
+        shutil.rmtree(self.export_directory)
 
         # Test repository.find_revision_number().
         revision_number = repo.find_revision_number(main_branch)
