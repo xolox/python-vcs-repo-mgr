@@ -7,6 +7,7 @@
 # Standard library modules.
 import logging
 import os
+import random
 import shutil
 import tempfile
 import unittest
@@ -40,6 +41,10 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.repo_test_helper(repo=HgRepo(local=self.hg_directory,
                                           remote='https://bitbucket.org/ianb/virtualenv'),
                               main_branch='trunk')
+
+    def test_argument_checking(self):
+        non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
+        self.assertRaises(Exception, GitRepo(local=non_existing_repo))
 
     def repo_test_helper(self, repo, main_branch):
 
