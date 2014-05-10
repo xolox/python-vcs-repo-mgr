@@ -16,7 +16,7 @@ import coloredlogs
 # The module we're testing.
 from vcs_repo_mgr import GitRepo
 
-GIT_REPO = 'git@github.com:xolox/python-verboselogs.git'
+GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
 
 class VcsRepoMgrTestCase(unittest.TestCase):
 
