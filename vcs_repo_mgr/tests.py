@@ -42,17 +42,17 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                                   main_branch='trunk')
 
     def test_configured_repo(self):
-        with TemporaryDirectory() as config_directory, \
-             TemporaryDirectory() as local_checkout:
-            import vcs_repo_mgr
-            vcs_repo_mgr.USER_CONFIG_FILE = os.path.join(config_directory, 'vcs-repo-mgr.ini')
-            with open(vcs_repo_mgr.USER_CONFIG_FILE, 'w') as handle:
-                handle.write('[test]\n')
-                handle.write('type = git\n')
-                handle.write('local = %s\n' % local_checkout)
-                handle.write('remote = %s\n' % REMOTE_GIT_REPO)
-            repository = find_configured_repository('test')
-            self.repo_test_helper(repo=repository, main_branch='master')
+        with TemporaryDirectory() as config_directory:
+            with TemporaryDirectory() as local_checkout:
+                import vcs_repo_mgr
+                vcs_repo_mgr.USER_CONFIG_FILE = os.path.join(config_directory, 'vcs-repo-mgr.ini')
+                with open(vcs_repo_mgr.USER_CONFIG_FILE, 'w') as handle:
+                    handle.write('[test]\n')
+                    handle.write('type = git\n')
+                    handle.write('local = %s\n' % local_checkout)
+                    handle.write('remote = %s\n' % REMOTE_GIT_REPO)
+                repository = find_configured_repository('test')
+                self.repo_test_helper(repo=repository, main_branch='master')
 
     def test_argument_checking(self):
         non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
