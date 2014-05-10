@@ -28,9 +28,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.export_directory = tempfile.mkdtemp()
 
     def tearDown(self):
-        shutil.rmtree(self.git_directory)
-        shutil.rmtree(self.hg_directory)
-        shutil.rmtree(self.export_directory)
+        for directory in [self.git_directory, self.hg_directory, self.export_directory]:
+            if os.path.isdir(directory):
+                shutil.rmtree(directory)
 
     def test_git_repo(self):
         self.repo_test_helper(repo=GitRepo(local=self.git_directory,
