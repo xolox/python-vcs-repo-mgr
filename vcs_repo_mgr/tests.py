@@ -44,7 +44,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_argument_checking(self):
         non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
-        self.assertRaises(Exception, GitRepo(local=non_existing_repo))
+        self.assertRaises(Exception, GitRepo, local=non_existing_repo)
 
     def repo_test_helper(self, repo, main_branch):
 
