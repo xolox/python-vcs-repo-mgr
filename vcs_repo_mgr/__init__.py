@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 10, 2014
+# Last Change: May 11, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 
 # Standard library modules.
 import functools
@@ -289,18 +289,6 @@ class Revision(object):
         if self._revision_number is None:
             self._revision_number = self.repository.find_revision_number(self.revision_id)
         return self._revision_number
-
-    def __hash__(self):
-        return hash(self._key())
-
-    def __eq__(self, other):
-        return type(self) == type(other) and self._key() == other._key()
-
-    def _key(self):
-        return (self.repository,
-                self.revision_id,
-                self._revision_number,
-                self.branch)
 
     def __repr__(self):
         fields = ["repository=%r" % self.repository,

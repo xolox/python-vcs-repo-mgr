@@ -1,7 +1,7 @@
 # Automated tests for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 10, 2014
+# Last Change: May 11, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -43,18 +43,32 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                                               remote='https://bitbucket.org/ianb/virtualenv'),
                                   main_branch='trunk')
 
-    def test_configured_repo(self):
+    def test_configured_repos(self):
         with TemporaryDirectory() as config_directory:
             with TemporaryDirectory() as local_checkout:
+                # Change the default configuration file location.
                 import vcs_repo_mgr
                 vcs_repo_mgr.USER_CONFIG_FILE = os.path.join(config_directory, 'vcs-repo-mgr.ini')
+                # Create a configuration file for testing.
                 with open(vcs_repo_mgr.USER_CONFIG_FILE, 'w') as handle:
                     handle.write('[test]\n')
                     handle.write('type = git\n')
                     handle.write('local = %s\n' % local_checkout)
                     handle.write('remote = %s\n' % REMOTE_GIT_REPO)
+                    handle.write('[test_2]\n')
+                    handle.write('type = git\n')
+                    handle.write('local = %s\n' % local_checkout)
+                    handle.write('remote = %s\n' % REMOTE_GIT_REPO)
+                    handle.write('[test-2]\n')
+                    handle.write('type = git\n')
+                    handle.write('local = %s\n' % local_checkout)
+                    handle.write('remote = %s\n' % REMOTE_GIT_REPO)
+                # Run the tests on a valid configured repository.
                 repository = find_configured_repository('test')
                 self.repo_test_helper(repo=repository, main_branch='master')
+                # Check error handling.
+                self.assertRaises(ValueError, find_configured_repository, 'non-existing')
+                self.assertRaises(ValueError, find_configured_repository, 'test-2')
 
     def test_argument_checking(self):
         non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
@@ -84,6 +98,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             self.assertTrue(rev.branch)
             self.assertTrue(rev.revision_number > 0)
             self.assertTrue(REVISION_ID_PATTERN.match(rev.revision_id))
+            # Test revision.__repr__().
+            self.assertTrue(isinstance(repr(rev), str))
 
         # Test repository export.
         with TemporaryDirectory() as export_directory:
