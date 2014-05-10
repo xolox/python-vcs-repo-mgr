@@ -63,7 +63,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(main_branch in repo.branches)
 
         # Test repository export.
-        repo.export(self.export_directory)
+        repo.export(self.export_directory, main_branch)
         num_files = 0
         for root, dirs, files in os.walk(self.export_directory):
             num_files += len(files)
