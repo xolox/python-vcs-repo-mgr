@@ -81,7 +81,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertEqual(len(repo.branches), 1)
         self.assertTrue(main_branch in repo.branches)
         for rev in repo.branches.values():
-            self.assertTrue(rev.branch_name)
+            self.assertTrue(rev.branch)
             self.assertTrue(rev.revision_number > 0)
             self.assertTrue(REVISION_ID_PATTERN.match(rev.revision_id))
 
