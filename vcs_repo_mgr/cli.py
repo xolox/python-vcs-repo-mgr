@@ -1,7 +1,7 @@
 # Command line interface for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 4, 2014
+# Last Change: May 10, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -104,29 +104,29 @@ def main():
         if not actions:
             usage()
             return
-    except Exception, e:
+    except Exception as e:
         logger.error(e)
-        print
+        print()
         usage()
         sys.exit(1)
     # Execute the requested action(s).
     try:
         for action in actions:
             action()
-    except Exception, e:
+    except Exception:
         logger.exception("Failed to execute requested action(s)!")
         sys.exit(1)
 
 def print_directory(repository):
-    print repository.local
+    print(repository.local)
 
 def print_revision_number(repository, revision):
-    print repository.find_revision_number(revision)
+    print(repository.find_revision_number(revision))
     
 def print_revision_id(repository, revision):
-    print repository.find_revision_id(revision)
+    print(repository.find_revision_id(revision))
 
 def usage():
-    print __doc__.strip()
+    print(__doc__.strip())
 
 # vim: ts=4 sw=4 et

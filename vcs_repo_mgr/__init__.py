@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 5, 2014
+# Last Change: May 10, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -37,12 +37,18 @@ From github.com:xolox/python-verboselogs
 __version__ = '0.1.5'
 
 # Standard library modules.
-import ConfigParser
 import functools
 import logging
 import os
 import pipes
 import re
+
+try:
+    # Python 2.x.
+    import ConfigParser as configparser
+except ImportError:
+    # Python 3.x.
+    import configparser
 
 # External dependencies.
 from executor import execute
@@ -84,7 +90,7 @@ def find_configured_repository(name):
     :param name: The name of the repository (a string).
     :returns: A :py:class:`Repository` object.
     """
-    parser = ConfigParser.RawConfigParser()
+    parser = configparser.RawConfigParser()
     for config_file in [SYSTEM_CONFIG_FILE, USER_CONFIG_FILE]:
         if os.path.isfile(config_file):
             logger.debug("Loading configuration file: %s", format_path(config_file))
@@ -92,10 +98,10 @@ def find_configured_repository(name):
     matching_repos = [r for r in parser.sections() if normalize_name(name) == normalize_name(r)]
     if not matching_repos:
         msg = "No repositories found matching the name %r!"
-        raise ValueError, msg % name
+        raise ValueError(msg % name)
     elif len(matching_repos) != 1:
         msg = "Multiple repositories found matching the name %r! (%s)"
-        raise ValueError, msg % (name, concatenate(map(repr, matching_repos)))
+        raise ValueError(msg % (name, concatenate(map(repr, matching_repos))))
     else:
         options = dict(parser.items(matching_repos[0]))
         vcs_type = options.get('type', '').lower()
@@ -104,7 +110,7 @@ def find_configured_repository(name):
         elif vcs_type == 'git':
             return GitRepo(local=options.get('local'), remote=options.get('remote'))
         else:
-            raise ValueError, "VCS type not supported! (%s)" % vcs_type
+            raise ValueError("VCS type not supported! (%s)" % vcs_type)
 
 def normalize_name(name):
     """
@@ -142,7 +148,7 @@ class Repository(object):
         self.remote = remote
         if not (self.exists or self.remote):
             msg = "Local repository (%r) doesn't exist and no remote repository specified!"
-            raise ValueError, msg % self.local
+            raise ValueError(msg % self.local)
 
     @property
     def exists(self):
@@ -151,7 +157,7 @@ class Repository(object):
 
         :returns: ``True`` if the local directory contains a repository, ``False`` otherwise.
         """
-        raise NotImplemented
+        raise NotImplemented()
 
     def create(self):
         """
@@ -207,7 +213,7 @@ class Repository(object):
                          the default branch.
         :returns: The local revision number (an integer).
         """
-        raise NotImplemented
+        raise NotImplemented()
 
     def find_revision_id(self, revision):
         """
@@ -218,7 +224,7 @@ class Repository(object):
                          the default branch.
         :returns: The global revision id (a hexadecimal string).
         """
-        raise NotImplemented
+        raise NotImplemented()
 
     @property
     def branches(self):

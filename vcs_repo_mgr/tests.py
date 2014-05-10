@@ -1,7 +1,7 @@
 # Automated tests for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 4, 2014
+# Last Change: May 10, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -54,7 +54,10 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
         # Test repository.find_revision_id().
         revision_id = self.repository.find_revision_id('master')
-        self.assertEqual(type(revision_id), str)
+        try:
+            self.assertTrue(isinstance(revision_id, unicode))
+        except NameError:
+            self.assertTrue(isinstance(revision_id, str))
         self.assertTrue(revision_id.startswith(self.repository.branches['master'].revision_id))
 
 # vim: ts=4 sw=4 et

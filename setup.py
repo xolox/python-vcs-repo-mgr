@@ -3,7 +3,7 @@
 # Setup script for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 4, 2014
+# Last Change: May 10, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 import re
@@ -21,7 +21,7 @@ for line in open(module, 'r'):
         version_string = match.group(1)
         break
 else:
-    raise Exception, "Failed to extract version from %s!" % module
+    raise Exception("Failed to extract version from %s!" % module)
 
 # Fill in the long description (for the benefit of PyPi)
 # with the contents of README.rst (rendered by GitHub).
