@@ -14,50 +14,59 @@ import unittest
 import coloredlogs
 
 # The module we're testing.
-from vcs_repo_mgr import GitRepo
-
-GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
+from vcs_repo_mgr import GitRepo, HgRepo
 
 class VcsRepoMgrTestCase(unittest.TestCase):
 
     def setUp(self):
         coloredlogs.install()
         coloredlogs.set_level(logging.DEBUG)
-        self.directory = tempfile.mkdtemp()
-        self.repository = GitRepo(local=self.directory, remote=GIT_REPO)
+        self.git_directory = tempfile.mkdtemp()
+        self.hg_directory = tempfile.mkdtemp()
 
     def tearDown(self):
-        shutil.rmtree(self.directory)
+        shutil.rmtree(self.git_directory)
+        shutil.rmtree(self.hg_directory)
 
-    def runTest(self):
+    def test_git_repo(self):
+        self.repo_test_helper(repo=GitRepo(local=self.git_directory,
+                                           remote='https://github.com/xolox/python-verboselogs.git'),
+                              main_branch='master')
+
+    def test_hg_repo(self):
+        self.repo_test_helper(repo=HgRepo(local=self.hg_directory,
+                                          remote='https://bitbucket.org/ianb/virtualenv'),
+                              main_branch='trunk')
+
+    def repo_test_helper(self, repo, main_branch):
 
         # Test repository.exists on a non existing repository.
-        self.assertEqual(self.repository.exists, False)
+        self.assertEqual(repo.exists, False)
 
         # Test repository.create().
-        self.repository.create()
+        repo.create()
 
         # Test repository.exists on an existing repository.
-        self.assertEqual(self.repository.exists, True)
+        self.assertEqual(repo.exists, True)
 
         # Test repository.update().
-        self.repository.update()
+        repo.update()
 
         # Test repository branches.
-        self.assertEqual(len(self.repository.branches), 1)
-        self.assertTrue('master' in self.repository.branches)
+        self.assertEqual(len(repo.branches), 1)
+        self.assertTrue(main_branch in repo.branches)
 
         # Test repository.find_revision_number().
-        revision_number = self.repository.find_revision_number('master')
+        revision_number = repo.find_revision_number(main_branch)
         self.assertEqual(type(revision_number), int)
         self.assertTrue(revision_number > 0)
 
         # Test repository.find_revision_id().
-        revision_id = self.repository.find_revision_id('master')
+        revision_id = repo.find_revision_id(main_branch)
         try:
             self.assertTrue(isinstance(revision_id, unicode))
         except NameError:
             self.assertTrue(isinstance(revision_id, str))
-        self.assertTrue(revision_id.startswith(self.repository.branches['master'].revision_id))
+        self.assertTrue(revision_id.startswith(repo.branches[main_branch].revision_id))
 
 # vim: ts=4 sw=4 et
