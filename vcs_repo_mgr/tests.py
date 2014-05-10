@@ -16,31 +16,43 @@ import unittest
 import coloredlogs
 
 # The module we're testing.
-from vcs_repo_mgr import GitRepo, HgRepo
+from vcs_repo_mgr import GitRepo, HgRepo, find_configured_repository
+
+# Initialize a logger.
+logger = logging.getLogger(__name__)
+
+# We need this one in multiple places.
+REMOTE_GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
 
 class VcsRepoMgrTestCase(unittest.TestCase):
 
     def setUp(self):
         coloredlogs.install()
         coloredlogs.set_level(logging.DEBUG)
-        self.git_directory = tempfile.mkdtemp()
-        self.hg_directory = tempfile.mkdtemp()
-        self.export_directory = tempfile.mkdtemp()
-
-    def tearDown(self):
-        for directory in [self.git_directory, self.hg_directory, self.export_directory]:
-            if os.path.isdir(directory):
-                shutil.rmtree(directory)
 
     def test_git_repo(self):
-        self.repo_test_helper(repo=GitRepo(local=self.git_directory,
-                                           remote='https://github.com/xolox/python-verboselogs.git'),
-                              main_branch='master')
+        with TemporaryDirectory() as local_checkout:
+            self.repo_test_helper(repo=GitRepo(local=local_checkout, remote=REMOTE_GIT_REPO),
+                                  main_branch='master')
 
     def test_hg_repo(self):
-        self.repo_test_helper(repo=HgRepo(local=self.hg_directory,
-                                          remote='https://bitbucket.org/ianb/virtualenv'),
-                              main_branch='trunk')
+        with TemporaryDirectory() as local_checkout:
+            self.repo_test_helper(repo=HgRepo(local=local_checkout,
+                                              remote='https://bitbucket.org/ianb/virtualenv'),
+                                  main_branch='trunk')
+
+    def test_configured_repo(self):
+        with TemporaryDirectory() as config_directory, \
+             TemporaryDirectory() as local_checkout:
+            import vcs_repo_mgr
+            vcs_repo_mgr.USER_CONFIG_FILE = os.path.join(config_directory, 'vcs-repo-mgr.ini')
+            with open(vcs_repo_mgr.USER_CONFIG_FILE, 'w') as handle:
+                handle.write('[test]\n')
+                handle.write('type = git\n')
+                handle.write('local = %s\n' % local_checkout)
+                handle.write('remote = %s\n' % REMOTE_GIT_REPO)
+            repository = find_configured_repository('test')
+            self.repo_test_helper(repo=repository, main_branch='master')
 
     def test_argument_checking(self):
         non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
@@ -68,12 +80,12 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(main_branch in repo.branches)
 
         # Test repository export.
-        repo.export(self.export_directory, main_branch)
-        num_files = 0
-        for root, dirs, files in os.walk(self.export_directory):
-            num_files += len(files)
-        self.assertTrue(num_files > 0)
-        shutil.rmtree(self.export_directory)
+        with TemporaryDirectory() as export_directory:
+            repo.export(export_directory, main_branch)
+            num_files = 0
+            for root, dirs, files in os.walk(export_directory):
+                num_files += len(files)
+            self.assertTrue(num_files > 0)
 
         # Test repository.find_revision_number().
         revision_number = repo.find_revision_number(main_branch)
@@ -87,5 +99,28 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         except NameError:
             self.assertTrue(isinstance(revision_id, str))
         self.assertTrue(revision_id.startswith(repo.branches[main_branch].revision_id))
+
+
+class TemporaryDirectory(object):
+
+    """
+    Easy temporary directory creation & cleanup using the :keyword:`with` statement:
+
+    .. code-block:: python
+
+       with TemporaryDirectory() as directory:
+           # Do something useful here.
+           assert os.path.isdir(directory)
+    """
+
+    def __enter__(self):
+        self.temporary_directory = tempfile.mkdtemp()
+        logger.debug("Created temporary directory: %s", self.temporary_directory)
+        return self.temporary_directory
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        logger.debug("Cleaning up temporary directory: %s", self.temporary_directory)
+        shutil.rmtree(self.temporary_directory)
+        del self.temporary_directory
 
 # vim: ts=4 sw=4 et
