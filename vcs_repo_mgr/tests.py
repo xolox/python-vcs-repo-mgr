@@ -8,6 +8,7 @@
 import logging
 import os
 import random
+import re
 import shutil
 import tempfile
 import unittest
@@ -21,7 +22,8 @@ from vcs_repo_mgr import GitRepo, HgRepo, find_configured_repository
 # Initialize a logger.
 logger = logging.getLogger(__name__)
 
-# We need this one in multiple places.
+# We need these in multiple places.
+REVISION_ID_PATTERN = re.compile('^[A-Fa-f0-9]+$')
 REMOTE_GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
 
 class VcsRepoMgrTestCase(unittest.TestCase):
@@ -78,10 +80,14 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test repository branches.
         self.assertEqual(len(repo.branches), 1)
         self.assertTrue(main_branch in repo.branches)
+        for rev in repo.branches.values():
+            self.assertTrue(rev.branch_name)
+            self.assertTrue(rev.revision_number > 0)
+            self.assertTrue(REVISION_ID_PATTERN.match(rev.revision_id))
 
         # Test repository export.
         with TemporaryDirectory() as export_directory:
-            repo.export(export_directory, main_branch)
+            repo.export(os.path.join(export_directory, 'subdirectory'), main_branch)
             num_files = 0
             for root, dirs, files in os.walk(export_directory):
                 num_files += len(files)
@@ -94,12 +100,12 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
         # Test repository.find_revision_id().
         revision_id = repo.find_revision_id(main_branch)
+        self.assertTrue(REVISION_ID_PATTERN.match(revision_id))
         try:
             self.assertTrue(isinstance(revision_id, unicode))
         except NameError:
             self.assertTrue(isinstance(revision_id, str))
         self.assertTrue(revision_id.startswith(repo.branches[main_branch].revision_id))
-
 
 class TemporaryDirectory(object):
 

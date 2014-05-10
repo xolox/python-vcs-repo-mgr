@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.2'
+__version__ = '0.2.1'
 
 # Standard library modules.
 import functools
@@ -286,7 +286,7 @@ class Revision(object):
 
     @property
     def revision_number(self):
-        if self._revision_number:
+        if self._revision_number is None:
             self._revision_number = self.repository.find_revision_number(self.revision_id)
         return self._revision_number
 
@@ -307,7 +307,7 @@ class Revision(object):
                   "revision_id=%r" % self.revision_id]
         if self.branch:
             fields.append("branch=%r" % self.branch)
-        if self._revision_number:
+        if self._revision_number is not None:
             fields.append("revision_number=%r" % self._revision_number)
         return "%s(%s)" % (self.__class__.__name__, ', '.join(fields))
 
