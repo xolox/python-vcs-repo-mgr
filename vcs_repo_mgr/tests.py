@@ -10,19 +10,29 @@ import os
 import random
 import re
 import shutil
+import sys
 import tempfile
 import unittest
+
+try:
+    # Python 2.x.
+    from StringIO import StringIO
+except ImportError:
+    # Python 3.x.
+    from io import StringIO
 
 # External dependencies.
 import coloredlogs
 
 # The module we're testing.
 from vcs_repo_mgr import GitRepo, HgRepo, find_configured_repository
+from vcs_repo_mgr.cli import main
 
 # Initialize a logger.
 logger = logging.getLogger(__name__)
 
 # We need these in multiple places.
+REVISION_NR_PATTERN = re.compile('^[0-9]+$')
 REVISION_ID_PATTERN = re.compile('^[A-Fa-f0-9]+$')
 REMOTE_GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
 
@@ -55,20 +65,28 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                     handle.write('type = git\n')
                     handle.write('local = %s\n' % local_checkout)
                     handle.write('remote = %s\n' % REMOTE_GIT_REPO)
+                    handle.write('\n')
                     handle.write('[test_2]\n')
                     handle.write('type = git\n')
                     handle.write('local = %s\n' % local_checkout)
                     handle.write('remote = %s\n' % REMOTE_GIT_REPO)
+                    handle.write('\n')
                     handle.write('[test-2]\n')
                     handle.write('type = git\n')
                     handle.write('local = %s\n' % local_checkout)
                     handle.write('remote = %s\n' % REMOTE_GIT_REPO)
+                    handle.write('\n')
+                    handle.write('[unsupported-repo-type]\n')
+                    handle.write('type = bzr\n')
+                    handle.write('local = /tmp/random-bzr-checkout\n')
                 # Run the tests on a valid configured repository.
-                repository = find_configured_repository('test')
-                self.repo_test_helper(repo=repository, main_branch='master')
+                self.assertTrue(REVISION_NR_PATTERN.match(call('--repository=test', '--find-revision-number')))
+                self.assertTrue(REVISION_ID_PATTERN.match(call('--repository=test', '--find-revision-id')))
+                self.assertEqual(call('--repository=test', '--find-directory').strip(), local_checkout)
                 # Check error handling.
                 self.assertRaises(ValueError, find_configured_repository, 'non-existing')
                 self.assertRaises(ValueError, find_configured_repository, 'test-2')
+                self.assertRaises(ValueError, find_configured_repository, 'unsupported-repo-type')
 
     def test_argument_checking(self):
         non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
@@ -144,5 +162,17 @@ class TemporaryDirectory(object):
         logger.debug("Cleaning up temporary directory: %s", self.temporary_directory)
         shutil.rmtree(self.temporary_directory)
         del self.temporary_directory
+
+def call(*arguments):
+    saved_stdout = sys.stdout
+    saved_argv = sys.argv
+    try:
+        sys.stdout = StringIO()
+        sys.argv = [sys.argv[0]] + list(arguments)
+        main()
+        return sys.stdout.getvalue()
+    finally:
+        sys.stdout = saved_stdout
+        sys.argv = saved_argv
 
 # vim: ts=4 sw=4 et
