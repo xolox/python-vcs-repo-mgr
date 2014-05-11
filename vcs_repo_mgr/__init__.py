@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 
 # Standard library modules.
 import functools
@@ -179,6 +179,8 @@ class Repository(object):
     def update(self):
         """
         Update the local clone of the remote version control repository.
+
+        .. note:: Automatically creates the local repository on the first run.
         """
         if self.remote and not self.create():
             logger.info("Updating %s clone of %s at %s ..",
@@ -195,7 +197,10 @@ class Repository(object):
                           string).
         :param revision: The revision to export (a string). Defaults to the
                          latest revision in the default branch.
+
+        .. note:: Automatically creates the local repository on the first run.
         """
+        self.create()
         revision = revision or self.default_revision
         logger.info("Exporting revision %s of %s to %s ..", revision, self.local, directory)
         if not os.path.isdir(directory):
@@ -212,6 +217,8 @@ class Repository(object):
                          branch (a string). Defaults to the latest revision in
                          the default branch.
         :returns: The local revision number (an integer).
+
+        .. note:: Automatically creates the local repository on the first run.
         """
         raise NotImplemented()
 
@@ -223,6 +230,8 @@ class Repository(object):
                          branch (a string). Defaults to the latest revision in
                          the default branch.
         :returns: The global revision id (a hexadecimal string).
+
+        .. note:: Automatically creates the local repository on the first run.
         """
         raise NotImplemented()
 
@@ -233,7 +242,10 @@ class Repository(object):
 
         :returns: A :py:class:`dict` with branch names (strings) as keys and
                   :py:class:`Revision` objects as values.
+
+        .. note:: Automatically creates the local repository on the first run.
         """
+        self.create()
         mapping = {}
         for revision in self.find_branches():
             mapping[revision.branch] = revision
@@ -318,12 +330,14 @@ class HgRepo(Repository):
         return os.path.isdir(os.path.join(self.local, '.hg'))
 
     def find_revision_number(self, revision=None):
+        self.create()
         revision = revision or self.default_revision
         result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--num', capture=True).rstrip('+')
         assert result and result.isdigit(), "Failed to find local revision number! ('hg id --num' gave unexpected output)"
         return int(result)
 
     def find_revision_id(self, revision=None):
+        self.create()
         revision = revision or self.default_revision
         result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--debug', '--id', capture=True).rstrip('+')
         assert re.match('^[A-Fa-z0-9]+$', result), "Failed to find global revision id! ('hg id --id' gave unexpected output)"
@@ -360,12 +374,14 @@ class GitRepo(Repository):
                 os.path.isfile(os.path.join(self.local, 'config')))
 
     def find_revision_number(self, revision=None):
+        self.create()
         revision = revision or self.default_revision
         result = execute('git', 'rev-list', revision, '--count', capture=True, directory=self.local)
         assert result and result.isdigit(), "Failed to find local revision number! ('git rev-list --count' gave unexpected output)"
         return int(result)
 
     def find_revision_id(self, revision=None):
+        self.create()
         revision = revision or self.default_revision
         result = execute('git', 'rev-parse', revision, capture=True, directory=self.local)
         assert re.match('^[A-Fa-z0-9]+$', result), "Failed to find global revision id! ('git rev-parse' gave unexpected output)"
