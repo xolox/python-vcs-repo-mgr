@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 11, 2014
+# Last Change: May 31, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.2.3'
+__version__ = '0.2.4'
 
 # Standard library modules.
 import functools
