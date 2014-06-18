@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 31, 2014
+# Last Change: June 19, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.2.4'
+__version__ = '0.3'
 
 # Standard library modules.
 import functools
@@ -42,6 +42,7 @@ import logging
 import os
 import pipes
 import re
+import time
 
 try:
     # Python 2.x.
@@ -57,6 +58,9 @@ from humanfriendly import concatenate, format_path
 # Known configuration file locations.
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 SYSTEM_CONFIG_FILE = '/etc/vcs-repo-mgr.ini'
+
+# Environment variable used to rate limit repository updates.
+UPDATE_VARIABLE = 'VCS_REPO_MGR_UPDATE_LIMIT'
 
 # Initialize a logger.
 logger = logging.getLogger(__name__)
@@ -123,6 +127,23 @@ def normalize_name(name):
     """
     return re.sub('[^a-z0-9]', '', name.lower())
 
+class limit_repo_updates(object):
+
+    """
+    Avoid duplicate repository updates.
+
+    This context manager uses an environment variable to ensure that each
+    configured repository isn't updated more than once by the current process
+    and/or subprocesses.
+    """
+
+    def __enter__(self):
+        self.old_value = os.environ.get(UPDATE_VARIABLE)
+        os.environ[UPDATE_VARIABLE] = '%i' % time.time()
+
+    def __exit__(self, exc_type=None, exc_value=None, traceback=None):
+        os.environ[UPDATE_VARIABLE] = self.old_value
+
 class Repository(object):
 
     """
@@ -151,6 +172,15 @@ class Repository(object):
             raise ValueError(msg % self.local)
 
     @property
+    def vcs_directory(self):
+        """
+        Find the "dot" directory containing the VCS files.
+
+        :returns: The pathname of a directory (a string).
+        """
+        raise NotImplemented()
+
+    @property
     def exists(self):
         """
         Check if the local directory contains a supported version control repository.
@@ -158,6 +188,34 @@ class Repository(object):
         :returns: ``True`` if the local directory contains a repository, ``False`` otherwise.
         """
         raise NotImplemented()
+
+    @property
+    def last_updated_file(self):
+        """
+        The pathname of the file used to mark the last successful update (a string).
+        """
+        return os.path.join(self.vcs_directory, 'vcs-repo-mgr.txt')
+
+    @property
+    def last_updated(self):
+        """
+        Find the date and time when `vcs-repo-mgr` last checked for updates.
+
+        :returns: The number of seconds since the UNIX epoch (0 for remote
+                  repositories that don't have a local clone yet).
+        """
+        try:
+            with open(self.last_updated_file) as handle:
+                return int(handle.read())
+        except Exception:
+            return 0
+
+    def mark_updated(self):
+        """
+        Mark a successful repository update so that :py:attr:`last_updated` can report it.
+        """
+        with open(self.last_updated_file, 'w') as handle:
+            handle.write('%i\n' % time.time())
 
     def create(self):
         """
@@ -174,6 +232,7 @@ class Repository(object):
                         self.friendly_name, self.remote, self.local)
             execute(self.create_command.format(local=pipes.quote(self.local),
                                                remote=pipes.quote(self.remote)))
+            self.mark_updated()
             return True
 
     def update(self):
@@ -182,11 +241,22 @@ class Repository(object):
 
         .. note:: Automatically creates the local repository on the first run.
         """
-        if self.remote and not self.create():
-            logger.info("Updating %s clone of %s at %s ..",
-                        self.friendly_name, self.remote, self.local)
-            execute(self.update_command.format(local=pipes.quote(self.local),
-                                               remote=pipes.quote(self.remote)))
+        if not self.remote:
+            # If there is no remote configured, there's nothing we can do!
+            return
+        if self.create():
+            # If the local clone didn't exist yet and we just created it,
+            # we can skip the update (since there's no point).
+            return
+        global_last_update = int(os.environ.get(UPDATE_VARIABLE, '0'))
+        if global_last_update and self.last_updated >= global_last_update:
+            # If an update limit has been enforced we also skip the update.
+            return
+        logger.info("Updating %s clone of %s at %s ..",
+                    self.friendly_name, self.remote, self.local)
+        execute(self.update_command.format(local=pipes.quote(self.local),
+                                           remote=pipes.quote(self.remote)))
+        self.mark_updated()
 
     def export(self, directory, revision=None):
         """
@@ -326,8 +396,12 @@ class HgRepo(Repository):
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
     @property
+    def vcs_directory(self):
+        return os.path.join(self.local, '.hg')
+
+    @property
     def exists(self):
-        return os.path.isdir(os.path.join(self.local, '.hg'))
+        return os.path.isdir(self.vcs_directory)
 
     def find_revision_number(self, revision=None):
         self.create()
@@ -369,9 +443,13 @@ class GitRepo(Repository):
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
 
     @property
+    def vcs_directory(self):
+        directory = os.path.join(self.local, '.git')
+        return directory if os.path.isdir(directory) else self.local
+
+    @property
     def exists(self):
-        return (os.path.isdir(os.path.join(self.local, '.git')) or
-                os.path.isfile(os.path.join(self.local, 'config')))
+        return os.path.isfile(os.path.join(self.vcs_directory, 'config'))
 
     def find_revision_number(self, revision=None):
         self.create()
