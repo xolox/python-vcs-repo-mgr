@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: June 19, 2014
+# Last Change: June 22, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.3'
+__version__ = '0.3.1'
 
 # Standard library modules.
 import functools
@@ -142,7 +142,10 @@ class limit_repo_updates(object):
         os.environ[UPDATE_VARIABLE] = '%i' % time.time()
 
     def __exit__(self, exc_type=None, exc_value=None, traceback=None):
-        os.environ[UPDATE_VARIABLE] = self.old_value
+        if self.old_value is not None:
+            os.environ[UPDATE_VARIABLE] = self.old_value
+        elif UPDATE_VARIABLE in os.environ:
+            del os.environ[UPDATE_VARIABLE]
 
 class Repository(object):
 
