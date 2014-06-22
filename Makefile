@@ -1,7 +1,7 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 4, 2014
+# Last Change: June 22, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
@@ -27,7 +27,7 @@ install:
 	"$(VIRTUAL_ENV)/bin/pip" install --no-deps .
 
 test:
-	$(VIRTUAL_ENV)/bin/python setup.py test
+	"$(VIRTUAL_ENV)/bin/python" setup.py test
 
 docs: install
 	"$(VIRTUAL_ENV)/bin/pip-accel" install sphinx
@@ -42,3 +42,5 @@ publish:
 
 clean:
 	rm -Rf build dist docs/build *.egg-info
+
+.PHONY: default install test docs publish clean
