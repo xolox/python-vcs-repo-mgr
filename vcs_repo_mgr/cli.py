@@ -1,7 +1,7 @@
 # Command line interface for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 10, 2014
+# Last Change: September 14, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -26,8 +26,8 @@ Supported options:
   -v, --verbose               make more noise
   -h, --help                  show this message and exit
 
-The value of --revision defaults to `master' for git repositories and `default'
-for Mercurial repositories.
+The value of --revision defaults to `last:1' for Bazaar repositories,
+`master' for git repositories and `default' for Mercurial repositories.
 """
 
 # Standard library modules.

@@ -106,15 +106,13 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test repr(HgRepo).
         self.assertTrue(isinstance(repr(repository), str))
         # Test HgRepo.branches
+        self.validate_all_revisions(repository.branches)
         self.assertTrue('trunk' in repository.branches)
-        for rev in repository.branches.values():
-            self.validate_revision(rev)
         # Test HgRepo.tags.
+        self.validate_all_revisions(repository.tags)
         for tag_name in ['tip', '1.2', '1.3.4', '1.4.9', '1.5.2']:
             self.assertTrue(tag_name in repository.tags)
-        for rev in repository.tags.values():
-            self.validate_revision(rev)
-        self.assertGreater(repository.tags['1.5'].revision_number, repository.tags['1.2'].revision_number)
+        assert repository.tags['1.5'].revision_number > repository.tags['1.2'].revision_number
         # Test HgRepo.find_revision_id().
         self.assertTrue(repository.find_revision_id('1.2').startswith('ffa882669ca9'))
         # Test HgRepo.find_revision_number().
@@ -143,21 +141,54 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test repr(GitRepo).
         self.assertTrue(isinstance(repr(repository), str))
         # Test GitRepo.branches
+        self.validate_all_revisions(repository.branches)
         self.assertTrue('master' in repository.branches)
-        for rev in repository.branches.values():
-            self.assertTrue(rev.revision_number > 0)
-            self.assertTrue(isinstance(repr(rev), str))
-            self.assertTrue(HEX_SUM_PATTERN.match(rev.revision_id))
         # Test GitRepo.tags.
+        self.validate_all_revisions(repository.tags)
         self.assertTrue('1.0' in repository.tags)
         self.assertTrue('1.0.1' in repository.tags)
-        for rev in repository.tags.values():
-            self.assertTrue(rev.revision_number > 0)
-            self.assertTrue(isinstance(repr(rev), str))
-            self.assertTrue(HEX_SUM_PATTERN.match(rev.revision_id))
-        self.assertGreater(repository.tags['1.0.1'].revision_number, repository.tags['1.0'].revision_number)
+        assert repository.tags['1.0.1'].revision_number > repository.tags['1.0'].revision_number
         # Test GitRepo.find_revision_id().
         self.assertEqual(repository.find_revision_id('1.0'), 'f6b89e5314d951bba4aa876ddbeef1deeb18932c')
+        # Test GitRepo.export().
+        export_directory = self.mkdtemp()
+        repository.export(revision='1.0', directory=export_directory)
+        # Make sure the contents were properly exported.
+        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
+        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'verboselogs.py')))
+
+    def test_bzr_repo(self):
+        """
+        Tests for Bazaar repository support.
+        """
+        # Instantiate a BzrRepo object using a configuration file.
+        repository = self.create_repo_using_config('bzr', 'lp:python-apt')
+        # Test BzrRepo.exists on a non existing repository.
+        self.assertEqual(repository.exists, False)
+        # Test BzrRepo.create().
+        repository.create()
+        # Test BzrRepo.exists on an existing repository.
+        self.assertEqual(repository.exists, True)
+        # Test BzrRepo.update().
+        repository.update()
+        # Test repr(BzrRepo).
+        self.assertTrue(isinstance(repr(repository), str))
+        # Test BzrRepo.branches.
+        self.validate_all_revisions(repository.branches)
+        # Test BzrRepo.tags.
+        self.validate_all_revisions(repository.tags, id_pattern=re.compile(r'^\S+$'))
+        self.assertTrue('0.7.9' in repository.tags)
+        self.assertTrue('0.8.9' in repository.tags)
+        self.assertTrue('0.9.3.9' in repository.tags)
+        assert repository.tags['0.8.9'].revision_number > repository.tags['0.7.9'].revision_number
+        # Test BzrRepo.find_revision_id().
+        self.assertEqual(repository.find_revision_id('0.8.9'), 'git-v1:e2e4d3dd3dc2a41469f5d559cbdb5ca6c5057f01')
+        # Test BzrRepo.export().
+        export_directory = self.mkdtemp()
+        repository.export(revision='0.7.9', directory=export_directory)
+        # Make sure the contents were properly exported.
+        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
+        self.assertTrue(os.path.isdir(os.path.join(export_directory, 'apt')))
 
     def create_repo_using_config(self, repository_type, remote_location):
         """
@@ -203,27 +234,13 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(isinstance(repr(revision), str))
         self.assertTrue(id_pattern.match(revision.revision_id))
 
-class TemporaryDirectory(object):
+    def validate_all_revisions(self, mapping, **kw):
+        """
+        Perform some generic sanity checks on a dictionary with :py:class:`Revision` values.
+        """
+        for revision in mapping.values():
+            self.validate_revision(revision, **kw)
 
-    """
-    Easy temporary directory creation & cleanup using the :keyword:`with` statement:
-
-    .. code-block:: python
-
-       with TemporaryDirectory() as directory:
-           # Do something useful here.
-           assert os.path.isdir(directory)
-    """
-
-    def __enter__(self):
-        self.temporary_directory = tempfile.mkdtemp()
-        logger.debug("Created temporary directory: %s", self.temporary_directory)
-        return self.temporary_directory
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        logger.debug("Cleaning up temporary directory: %s", self.temporary_directory)
-        shutil.rmtree(self.temporary_directory)
-        del self.temporary_directory
 
 def call(*arguments):
     saved_stdout = sys.stdout

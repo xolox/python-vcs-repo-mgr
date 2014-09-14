@@ -3,7 +3,7 @@
 # Setup script for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: June 22, 2014
+# Last Change: September 14, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 import os
@@ -39,13 +39,14 @@ requirements = [l.strip() for l in open(join(source_directory, 'requirements.txt
 # pragmatic about things and turn Mercurial into a conditional dependency.
 # See also: http://mercurial.selenic.com/wiki/SupportedPythonVersions
 if sys.version_info[0] == 2:
+    requirements.append('bzr >= 2.6.0')
     requirements.append('mercurial >= 2.9')
 else:
     # If Mercurial is not included in the Python requirements then it should at
     # least be included in the Debian package dependencies.
     with open(os.path.join(source_directory, 'stdeb.cfg'), 'w') as handle:
         handle.write('[vcs-repo-mgr]\n')
-        handle.write('Depends: git-core, mercurial\n')
+        handle.write('Depends: bzr, git | git-core, mercurial\n')
         handle.write('XS-Python-Version: >= 2.6\n')
 
 setup(name='vcs-repo-mgr',

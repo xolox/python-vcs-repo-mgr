@@ -29,7 +29,8 @@ install:
 	$(ACTIVATE) && pip install --no-deps .
 
 test: install
-	$(ACTIVATE) && python setup.py test
+	test -x "$(VIRTUAL_ENV)/bin/py.test" || ($(ACTIVATE) && pip-accel install pytest)
+	$(ACTIVATE) && py.test --exitfirst --capture=no vcs_repo_mgr/tests.py
 
 coverage: install
 	test -x "$(VIRTUAL_ENV)/bin/coverage" || ($(ACTIVATE) && pip-accel install coverage)
@@ -38,7 +39,7 @@ coverage: install
 	if [ "`whoami`" != root ] && which gnome-open >/dev/null 2>&1; then gnome-open htmlcov/index.html; fi
 
 docs: install
-	"$(VIRTUAL_ENV)/bin/pip-accel" install sphinx
+	test -x "$(VIRTUAL_ENV)/bin/sphinx-build" || ($(ACTIVATE) && pip-accel install sphinx)
 	cd docs && make html
 	if which gnome-open >/dev/null 2>&1; then \
 		gnome-open "docs/build/html/index.html"; \

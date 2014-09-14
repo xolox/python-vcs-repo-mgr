@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.5'
+__version__ = '0.6'
 
 # Standard library modules.
 import functools
@@ -86,10 +86,10 @@ def find_configured_repository(name):
        local = /home/peter/projects/vcs-repo-mgr
        remote = git@github.com:xolox/python-vcs-repo-mgr.git
 
-    Two VCS types are currently supported: ``hg`` (``mercurial`` is also
-    accepted) and ``git``. If an unsupported VCS type is used or no repository
-    can be found matching the given name :py:exc:`exceptions.ValueError` is
-    raised.
+    Three VCS types are currently supported: ``hg`` (``mercurial`` is also
+    accepted), ``git`` and ``bzr`` (``bazaar`` is also accepted). If an
+    unsupported VCS type is used or no repository can be found matching the
+    given name :py:exc:`exceptions.ValueError` is raised.
 
     :param name: The name of the repository (a string).
     :returns: A :py:class:`Repository` object.
@@ -113,6 +113,8 @@ def find_configured_repository(name):
             return HgRepo(local=options.get('local'), remote=options.get('remote'))
         elif vcs_type == 'git':
             return GitRepo(local=options.get('local'), remote=options.get('remote'))
+        elif vcs_type in ('bzr', 'bazaar'):
+            return BzrRepo(local=options.get('local'), remote=options.get('remote'))
         else:
             raise ValueError("VCS type not supported! (%s)" % vcs_type)
 
@@ -530,5 +532,86 @@ class GitRepo(Repository):
                 yield Revision(repository=self,
                                revision_id=tokens[0],
                                tag=tokens[1][len('refs/tags/'):])
+
+class BzrRepo(Repository):
+
+    """
+    Version control repository interface for Bazaar_ repositories.
+
+    .. _Bazaar: http://bazaar.canonical.com/en/
+    """
+
+    friendly_name = 'Bazaar'
+    default_revision = 'last:1'
+    create_command = 'bzr branch --use-existing-dir {remote} {local}'
+    update_command = 'cd {local} && bzr pull {remote}'
+    export_command = 'cd {local} && bzr export --revision={revision} {directory}'
+
+    @property
+    def vcs_directory(self):
+        return os.path.join(self.local, '.bzr')
+
+    @property
+    def exists(self):
+        return os.path.isfile(os.path.join(self.vcs_directory, 'branch-format'))
+
+    def find_revision_number(self, revision=None):
+        # Bazaar has the concept of dotted revision numbers:
+        #
+        #   For revisions which have been merged into a branch, a dotted
+        #   notation is used (e.g., 3112.1.5). Dotted revision numbers have
+        #   three numbers. The first number indicates what mainline revision
+        #   change is derived from. The second number is the branch counter.
+        #   There can be many branches derived from the same revision, so they
+        #   all get a unique number. The third number is the number of
+        #   revisions since the branch started. For example, 3112.1.5 is the
+        #   first branch from revision 3112, the fifth revision on that
+        #   branch.
+        #
+        #   (From http://doc.bazaar.canonical.com/bzr.2.6/en/user-guide/zen.html#understanding-revision-numbers)
+        #
+        # However we really just want to give a bare integer to our callers. It
+        # doesn't have to be globally accurate, but it should increase as new
+        # commits are made. Below is the equivalent of the git implementation
+        # for Bazaar.
+        self.create()
+        revision = revision or self.default_revision
+        result = execute('bzr', 'log', '--revision=..%s' % revision, '--line', capture=True, directory=self.local)
+        revision_number = len([line for line in result.splitlines() if line and not line.isspace()])
+        assert revision_number > 0, "Failed to find local revision number! ('bzr log --line' gave unexpected output)"
+        return revision_number
+
+    def find_revision_id(self, revision=None):
+        self.create()
+        revision = revision or self.default_revision
+        result = execute('bzr', 'version-info', '--revision=%s' % revision, '--custom', '--template={revision_id}', capture=True, directory=self.local)
+        logger.debug("Output of 'bzr version-info' command: %s", result)
+        assert result, "Failed to find global revision id! ('bzr version-info' gave unexpected output)"
+        return result
+
+    def find_branches(self):
+        logger.warning("Bazaar repository support doesn't include branches (consider using tags instead).")
+        return []
+
+    def find_tags(self):
+        # The `bzr tags' command reports tags pointing to non-existing
+        # revisions as `?' but doesn't provide revision ids. We can get the
+        # revision ids using the `bzr tags --show-ids' command but this command
+        # doesn't mark tags pointing to non-existing revisions. We combine
+        # the output of both because we want all the information.
+        valid_tags = []
+        listing = execute('bzr', 'tags', capture=True, directory=self.local)
+        for line in listing.splitlines():
+            tokens = line.split()
+            if len(tokens) == 2 and tokens[1] != '?':
+                valid_tags.append(tokens[0])
+        listing = execute('bzr', 'tags', '--show-ids', capture=True, directory=self.local)
+        for line in listing.splitlines():
+            tokens = line.split()
+            if len(tokens) == 2 and tokens[0] in valid_tags:
+                tag, revision_id = tokens
+                yield Revision(repository=self,
+                               revision_id=tokens[1],
+                               tag=tokens[0])
 
 # vim: ts=4 sw=4 et

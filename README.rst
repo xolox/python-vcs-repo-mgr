@@ -10,7 +10,7 @@ vcs-repo-mgr: Version control repository manager
 The Python package ``vcs-repo-mgr`` provides a command line program and Python
 API to perform common operations (in the context of packaging/deployment) on
 `version control`_ repositories. It's currently tested on Python 2.6, 2.7 and
-3.4. At the moment only Mercurial_ and Git_ repositories are supported.
+3.4. Bazaar_, Mercurial_ and Git_ repositories are currently supported.
 
 Usage
 -----
@@ -21,13 +21,13 @@ To get started you have to install the package:
 
      peter@macbook> pip install vcs-repo-mgr
 
-You will also need Mercurial_ and/or Git_ installed (depending on the type
-of repositories you want to work with). Here's how you install them on
+You will also need Bazaar_, Mercurial_ and/or Git_ installed (depending on the
+type of repositories you want to work with). Here's how you install them on
 Debian/Ubuntu:
 
   .. code-block:: sh
 
-     peter@macbook> sudo apt-get install mercurial git-core
+     peter@macbook> sudo apt-get install bzr mercurial git-core
 
 You now have the ``vcs-tool`` command available:
 
@@ -55,8 +55,8 @@ You now have the ``vcs-tool`` command available:
        -v, --verbose               make more noise
        -h, --help                  show this message and exit
 
-     The value of --revision defaults to `master' for git repositories and `default'
-     for Mercurial repositories.
+     The value of --revision defaults to `last:1' for Bazaar repositories,
+     `master' for git repositories and `default' for Mercurial repositories.
 
 Before you can use the ``vcs-tool`` command you have to create a configuration
 file:
@@ -177,6 +177,7 @@ This software is licensed under the `MIT license`_.
 © 2014 Peter Odding.
 
 .. External references:
+.. _Bazaar: http://bazaar.canonical.com/en/
 .. _Git: http://git-scm.com/
 .. _GitHub: https://github.com/xolox/python-vcs-repo-mgr
 .. _Mercurial: http://mercurial.selenic.com/
