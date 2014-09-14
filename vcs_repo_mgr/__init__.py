@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.6'
+__version__ = '0.6.1'
 
 # Standard library modules.
 import functools
@@ -128,6 +128,39 @@ def normalize_name(name):
     :returns: The normalized repository name (a string).
     """
     return re.sub('[^a-z0-9]', '', name.lower())
+
+def cast_to_repo(value):
+    """
+    Convert a string (taken to be a repository name) to a
+    :py:class:`Repository` object.
+
+    :param value: The name of a repository (a string or a
+                  :py:class:`Repository` object).
+    :returns: A :py:class:`Repository` object.
+    """
+    if not isinstance(value, Repository):
+        value = find_configured_repository(value)
+    return value
+
+def sum_revision_numbers(arguments):
+    """
+    Sum revision numbers of multiple repository/revision pairs. This is useful
+    when you're building a package based on revisions from multiple VCS
+    repositories. By taking changes in all repositories into account when
+    generating version numbers you can make sure that your version number is
+    bumped with every single change.
+
+    :param arguments: A list of strings with repository names and revision
+                      strings.
+    :returns: A single integer containing the summed revision numbers.
+    """
+    if len(arguments) % 2 != 0:
+        raise ValueError("Please provide an even number of arguments! (one or more repository/revision pairs)")
+    summed_revision_number = 0
+    while arguments:
+        repository = cast_to_repo(arguments.pop(0))
+        summed_revision_number += repository.find_revision_number(arguments.pop(0))
+    return summed_revision_number
 
 class limit_vcs_updates(object):
 

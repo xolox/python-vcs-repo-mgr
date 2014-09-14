@@ -5,6 +5,7 @@
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
+import hashlib
 import logging
 import os
 import random
@@ -36,32 +37,53 @@ logger = logging.getLogger(__name__)
 DIGITS_PATTERN = re.compile('^[0-9]+$')
 HEX_SUM_PATTERN = re.compile('^[A-Fa-f0-9]+$')
 
+# Locations of remote repositories.
+REMOTE_BZR_REPO = 'lp:python-apt'
+REMOTE_GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
+REMOTE_HG_REPO = 'https://bitbucket.org/ianb/virtualenv'
+
+# Global state of the test suite.
+TEMPORARY_DIRECTORIES = []
+LOCAL_CHECKOUTS = {}
+
+def create_temporary_directory():
+    """
+    Create a temporary directory that will be cleaned up when the test suite is
+    torn down.
+    """
+    temporary_directory = tempfile.mkdtemp()
+    TEMPORARY_DIRECTORIES.append(temporary_directory)
+    return temporary_directory
+
+def create_local_checkout(remote):
+    """
+    Create a directory for a local checkout of a remote repository.
+    """
+    context = hashlib.sha1()
+    context.update(remote)
+    key = context.hexdigest()
+    if key not in LOCAL_CHECKOUTS:
+        LOCAL_CHECKOUTS[key] = create_temporary_directory()
+    return LOCAL_CHECKOUTS[key]
+
+def tearDownModule():
+    """
+    Clean up temporary directories.
+    """
+    for directory in TEMPORARY_DIRECTORIES:
+        shutil.rmtree(directory)
+
 class VcsRepoMgrTestCase(unittest.TestCase):
 
-    def setUp(self):
+    def __init__(self, *args, **kw):
         """
         Initialize the test suite.
         """
+        # Initialize super classes.
+        super(VcsRepoMgrTestCase, self).__init__(*args, **kw)
         # Set up logging to the terminal.
         coloredlogs.install()
         coloredlogs.set_level(logging.DEBUG)
-        # Prepare a list of temporary directories to clean up.
-        self.temporary_directories = []
-
-    def mkdtemp(self):
-        """
-        Create a temporary directory.
-        """
-        temporary_directory = tempfile.mkdtemp()
-        self.temporary_directories.append(temporary_directory)
-        return temporary_directory
-
-    def tearDown(self):
-        """
-        Clean up temporary directories.
-        """
-        for directory in self.temporary_directories:
-            shutil.rmtree(directory)
 
     def test_argument_checking(self):
         """
@@ -77,26 +99,32 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         """
         call('--help')
         self.assertRaises(SystemExit, call, '--repository=non-existing', '--find-directory')
-        repository = self.create_repo_using_config('git', 'https://github.com/xolox/python-verboselogs.git')
+        repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
         self.assertTrue(DIGITS_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-number')))
         self.assertTrue(HEX_SUM_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-id')))
         self.assertEqual(call('--repository=test', '--find-directory', '--verbose').strip(), repository.local)
         with limit_vcs_updates():
             call('--repository=test', '--update')
             call('--repository=test', '--update')
-        export_directory = os.path.join(self.mkdtemp(), 'non-existing-subdirectory')
+        export_directory = os.path.join(create_temporary_directory(), 'non-existing-subdirectory')
         call('--repository=test', '--revision=master', '--export=%s' % export_directory)
         self.assertTrue(os.path.join(export_directory, 'setup.py'))
         self.assertTrue(os.path.join(export_directory, 'verboselogs.py'))
+
+    def test_revision_number_summing(self):
+        """
+        Test summing of local revision numbers.
+        """
+        self.create_repo_using_config('git', REMOTE_GIT_REPO, 'hg', REMOTE_HG_REPO)
+        output = call('--sum-revisions', 'test', '1.0', 'second', '1.2')
+        self.assertEqual(output.strip(), '125')
 
     def test_hg_repo(self):
         """
         Tests for Mercurial repository support.
         """
         # Instantiate a HgRepo object using a configuration file.
-        repository = self.create_repo_using_config('hg', 'https://bitbucket.org/ianb/virtualenv')
-        # Test HgRepo.exists on a non existing repository.
-        self.assertEqual(repository.exists, False)
+        repository = self.create_repo_using_config('hg', REMOTE_HG_REPO)
         # Test HgRepo.create().
         repository.create()
         # Test HgRepo.exists on an existing repository.
@@ -118,7 +146,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test HgRepo.find_revision_number().
         self.assertEqual(repository.find_revision_number('1.2'), 124)
         # Test HgRepo.export().
-        export_directory = self.mkdtemp()
+        export_directory = create_temporary_directory()
         repository.export(revision='1.2', directory=export_directory)
         # Make sure the contents were properly exported.
         self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
@@ -129,9 +157,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         Tests for git repository support.
         """
         # Instantiate a GitRepo object using a configuration file.
-        repository = self.create_repo_using_config('git', 'https://github.com/xolox/python-verboselogs.git')
-        # Test GitRepo.exists on a non existing repository.
-        self.assertEqual(repository.exists, False)
+        repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
         # Test GitRepo.create().
         repository.create()
         # Test GitRepo.exists on an existing repository.
@@ -151,7 +177,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test GitRepo.find_revision_id().
         self.assertEqual(repository.find_revision_id('1.0'), 'f6b89e5314d951bba4aa876ddbeef1deeb18932c')
         # Test GitRepo.export().
-        export_directory = self.mkdtemp()
+        export_directory = create_temporary_directory()
         repository.export(revision='1.0', directory=export_directory)
         # Make sure the contents were properly exported.
         self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
@@ -162,9 +188,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         Tests for Bazaar repository support.
         """
         # Instantiate a BzrRepo object using a configuration file.
-        repository = self.create_repo_using_config('bzr', 'lp:python-apt')
-        # Test BzrRepo.exists on a non existing repository.
-        self.assertEqual(repository.exists, False)
+        repository = self.create_repo_using_config('bzr', REMOTE_BZR_REPO)
         # Test BzrRepo.create().
         repository.create()
         # Test BzrRepo.exists on an existing repository.
@@ -184,20 +208,20 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test BzrRepo.find_revision_id().
         self.assertEqual(repository.find_revision_id('0.8.9'), 'git-v1:e2e4d3dd3dc2a41469f5d559cbdb5ca6c5057f01')
         # Test BzrRepo.export().
-        export_directory = self.mkdtemp()
+        export_directory = create_temporary_directory()
         repository.export(revision='0.7.9', directory=export_directory)
         # Make sure the contents were properly exported.
         self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
         self.assertTrue(os.path.isdir(os.path.join(export_directory, 'apt')))
 
-    def create_repo_using_config(self, repository_type, remote_location):
+    def create_repo_using_config(self, repository_type, remote_location, second_repository_type=None, second_remote_location=None):
         """
         Instantiate a :py:class:`.Repository` object by creating a temporary
         configuration file, thereby testing both configuration file handling
         and repository instantiation.
         """
-        config_directory = self.mkdtemp()
-        local_checkout = self.mkdtemp()
+        config_directory = create_temporary_directory()
+        local_checkout = create_local_checkout(remote_location)
         vcs_repo_mgr.USER_CONFIG_FILE = os.path.join(config_directory, 'vcs-repo-mgr.ini')
         with open(vcs_repo_mgr.USER_CONFIG_FILE, 'w') as handle:
             # Create a valid repository definition.
@@ -205,6 +229,12 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             handle.write('type = %s\n' % repository_type)
             handle.write('local = %s\n' % local_checkout)
             handle.write('remote = %s\n' % remote_location)
+            # Create a second valid repository definition?
+            if second_repository_type and second_remote_location:
+                handle.write('[second]\n')
+                handle.write('type = %s\n' % second_repository_type)
+                handle.write('local = %s\n' % create_local_checkout(second_remote_location))
+                handle.write('remote = %s\n' % second_remote_location)
             # Create the first of two duplicate definitions.
             handle.write('[test_2]\n')
             handle.write('type = %s\n' % repository_type)
@@ -236,11 +266,16 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def validate_all_revisions(self, mapping, **kw):
         """
-        Perform some generic sanity checks on a dictionary with :py:class:`Revision` values.
+        Perform some generic sanity checks on a dictionary with
+        :py:class:`Revision` values. Randomly picks some revisions to sanity
+        check (calculating the local revision number of a revision requires the
+        execution of an external command and there's really no point in doing
+        this hundreds of times).
         """
-        for revision in mapping.values():
+        revisions = mapping.values()
+        random.shuffle(revisions)
+        for revision in revisions[:10]:
             self.validate_revision(revision, **kw)
-
 
 def call(*arguments):
     saved_stdout = sys.stdout
