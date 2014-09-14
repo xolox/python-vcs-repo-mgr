@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: June 25, 2014
+# Last Change: September 14, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.4'
+__version__ = '0.5'
 
 # Standard library modules.
 import functools
@@ -181,7 +181,7 @@ class Repository(object):
 
         :returns: The pathname of a directory (a string).
         """
-        raise NotImplemented()
+        raise NotImplementedError()
 
     @property
     def exists(self):
@@ -190,7 +190,7 @@ class Repository(object):
 
         :returns: ``True`` if the local directory contains a repository, ``False`` otherwise.
         """
-        raise NotImplemented()
+        raise NotImplementedError()
 
     @property
     def last_updated_file(self):
@@ -293,7 +293,7 @@ class Repository(object):
 
         .. note:: Automatically creates the local repository on the first run.
         """
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def find_revision_id(self, revision):
         """
@@ -306,7 +306,7 @@ class Repository(object):
 
         .. note:: Automatically creates the local repository on the first run.
         """
-        raise NotImplemented()
+        raise NotImplementedError()
 
     @property
     def branches(self):
@@ -319,10 +319,36 @@ class Repository(object):
         .. note:: Automatically creates the local repository on the first run.
         """
         self.create()
-        mapping = {}
-        for revision in self.find_branches():
-            mapping[revision.branch] = revision
-        return mapping
+        return dict((r.branch, r) for r in self.find_branches())
+
+    @property
+    def tags(self):
+        """
+        Find information about the tags in the version control repository.
+
+        :returns: A :py:class:`dict` with tag names (strings) as keys and
+                  :py:class:`Revision` objects as values.
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        self.create()
+        return dict((r.tag, r) for r in self.find_tags())
+
+    def find_branches(self):
+        """
+        Find information about the branches in the version control repository.
+
+        :returns: A generator of :py:class:`Revision` objects.
+        """
+        raise NotImplementedError()
+
+    def find_tags(self):
+        """
+        Find information about the tags in the version control repository.
+
+        :returns: A generator of :py:class:`Revision` objects.
+        """
+        raise NotImplementedError()
 
     def __repr__(self):
         fields = []
@@ -353,9 +379,12 @@ class Revision(object):
 
     :ivar branch: The name of the branch in which the revision exists (a
           string). If not available this will be ``None``.
+
+    :ivar tag: The name of the tag associated to the revision (a string). If
+          not available this will be ``None``.
     """
 
-    def __init__(self, repository, revision_id, revision_number=None, branch=None):
+    def __init__(self, repository, revision_id, revision_number=None, branch=None, tag=None):
         """
         Create a :py:class:`Revision` object.
 
@@ -368,6 +397,7 @@ class Revision(object):
         self.revision_id = revision_id
         self._revision_number = revision_number
         self.branch = branch
+        self.tag = tag
 
     @property
     def revision_number(self):
@@ -376,12 +406,14 @@ class Revision(object):
         return self._revision_number
 
     def __repr__(self):
-        fields = ["repository=%r" % self.repository,
-                  "revision_id=%r" % self.revision_id]
+        fields = ["repository=%r" % self.repository]
         if self.branch:
             fields.append("branch=%r" % self.branch)
+        if self.tag:
+            fields.append("tag=%r" % self.tag)
         if self._revision_number is not None:
             fields.append("revision_number=%r" % self._revision_number)
+        fields.append("revision_id=%r" % self.revision_id)
         return "%s(%s)" % (self.__class__.__name__, ', '.join(fields))
 
 class HgRepo(Repository):
@@ -424,12 +456,23 @@ class HgRepo(Repository):
         listing = execute('hg', '--repository', self.local, 'branches', capture=True)
         for line in listing.splitlines():
             tokens = line.split()
-            if len(tokens) >= 2:
+            if len(tokens) >= 2 and ':' in tokens[1]:
                 revision_number, revision_id = tokens[1].split(':')
                 yield Revision(repository=self,
                                revision_id=revision_id,
                                revision_number=int(revision_number),
                                branch=tokens[0])
+
+    def find_tags(self):
+        listing = execute('hg', '--repository', self.local, 'tags', capture=True)
+        for line in listing.splitlines():
+            tokens = line.split()
+            if len(tokens) >= 2 and ':' in tokens[1]:
+                revision_number, revision_id = tokens[1].split(':')
+                yield Revision(repository=self,
+                               revision_id=revision_id,
+                               revision_number=int(revision_number),
+                               tag=tokens[0])
 
 class GitRepo(Repository):
 
@@ -478,5 +521,14 @@ class GitRepo(Repository):
                     yield Revision(repository=self,
                                    revision_id=tokens[1],
                                    branch=tokens[0])
+
+    def find_tags(self):
+        listing = execute('git', 'show-ref', '--tags', capture=True, directory=self.local)
+        for line in listing.splitlines():
+            tokens = line.split()
+            if len(tokens) >= 2 and tokens[1].startswith('refs/tags/'):
+                yield Revision(repository=self,
+                               revision_id=tokens[0],
+                               tag=tokens[1][len('refs/tags/'):])
 
 # vim: ts=4 sw=4 et

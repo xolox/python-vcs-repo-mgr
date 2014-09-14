@@ -1,7 +1,7 @@
 # Automated tests for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 11, 2014
+# Last Change: September 14, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -25,137 +25,183 @@ except ImportError:
 import coloredlogs
 
 # The module we're testing.
-from vcs_repo_mgr import GitRepo, find_configured_repository
+import vcs_repo_mgr
+from vcs_repo_mgr import GitRepo, find_configured_repository, limit_vcs_updates
 from vcs_repo_mgr.cli import main
 
 # Initialize a logger.
 logger = logging.getLogger(__name__)
 
 # We need these in multiple places.
-REVISION_NR_PATTERN = re.compile('^[0-9]+$')
-REVISION_ID_PATTERN = re.compile('^[A-Fa-f0-9]+$')
-REMOTE_GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
+DIGITS_PATTERN = re.compile('^[0-9]+$')
+HEX_SUM_PATTERN = re.compile('^[A-Fa-f0-9]+$')
 
 class VcsRepoMgrTestCase(unittest.TestCase):
 
     def setUp(self):
+        """
+        Initialize the test suite.
+        """
+        # Set up logging to the terminal.
         coloredlogs.install()
         coloredlogs.set_level(logging.DEBUG)
+        # Prepare a list of temporary directories to clean up.
+        self.temporary_directories = []
 
-    def test_git_repo(self):
-        self.repo_test_helper(repo_type='git',
-                              remote=REMOTE_GIT_REPO,
-                              main_branch='master')
+    def mkdtemp(self):
+        """
+        Create a temporary directory.
+        """
+        temporary_directory = tempfile.mkdtemp()
+        self.temporary_directories.append(temporary_directory)
+        return temporary_directory
 
-    def test_hg_repo(self):
-        self.repo_test_helper(repo_type='hg',
-                              remote='https://bitbucket.org/ianb/virtualenv',
-                              main_branch='trunk')
+    def tearDown(self):
+        """
+        Clean up temporary directories.
+        """
+        for directory in self.temporary_directories:
+            shutil.rmtree(directory)
 
     def test_argument_checking(self):
+        """
+        Test that subclasses of :py:class:`Repository` raise an exception on
+        non-existing local directories when no remote location is given.
+        """
         non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
         self.assertRaises(Exception, GitRepo, local=non_existing_repo)
 
-    def repo_test_helper(self, repo_type, remote, main_branch):
-        with TemporaryDirectory() as config_directory:
-            with TemporaryDirectory() as local_checkout:
+    def test_command_line_interface(self):
+        """
+        Test the command line interface.
+        """
+        call('--help')
+        self.assertRaises(SystemExit, call, '--repository=non-existing', '--find-directory')
+        repository = self.create_repo_using_config('git', 'https://github.com/xolox/python-verboselogs.git')
+        self.assertTrue(DIGITS_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-number')))
+        self.assertTrue(HEX_SUM_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-id')))
+        self.assertEqual(call('--repository=test', '--find-directory', '--verbose').strip(), repository.local)
+        with limit_vcs_updates():
+            call('--repository=test', '--update')
+            call('--repository=test', '--update')
+        export_directory = os.path.join(self.mkdtemp(), 'non-existing-subdirectory')
+        call('--repository=test', '--revision=master', '--export=%s' % export_directory)
+        self.assertTrue(os.path.join(export_directory, 'setup.py'))
+        self.assertTrue(os.path.join(export_directory, 'verboselogs.py'))
 
-                # Change the default configuration file location.
-                import vcs_repo_mgr
-                vcs_repo_mgr.USER_CONFIG_FILE = os.path.join(config_directory, 'vcs-repo-mgr.ini')
+    def test_hg_repo(self):
+        """
+        Tests for Mercurial repository support.
+        """
+        # Instantiate a HgRepo object using a configuration file.
+        repository = self.create_repo_using_config('hg', 'https://bitbucket.org/ianb/virtualenv')
+        # Test HgRepo.exists on a non existing repository.
+        self.assertEqual(repository.exists, False)
+        # Test HgRepo.create().
+        repository.create()
+        # Test HgRepo.exists on an existing repository.
+        self.assertEqual(repository.exists, True)
+        # Test HgRepo.update().
+        repository.update()
+        # Test repr(HgRepo).
+        self.assertTrue(isinstance(repr(repository), str))
+        # Test HgRepo.branches
+        self.assertTrue('trunk' in repository.branches)
+        for rev in repository.branches.values():
+            self.validate_revision(rev)
+        # Test HgRepo.tags.
+        for tag_name in ['tip', '1.2', '1.3.4', '1.4.9', '1.5.2']:
+            self.assertTrue(tag_name in repository.tags)
+        for rev in repository.tags.values():
+            self.validate_revision(rev)
+        self.assertGreater(repository.tags['1.5'].revision_number, repository.tags['1.2'].revision_number)
+        # Test HgRepo.find_revision_id().
+        self.assertTrue(repository.find_revision_id('1.2').startswith('ffa882669ca9'))
+        # Test HgRepo.find_revision_number().
+        self.assertEqual(repository.find_revision_number('1.2'), 124)
+        # Test HgRepo.export().
+        export_directory = self.mkdtemp()
+        repository.export(revision='1.2', directory=export_directory)
+        # Make sure the contents were properly exported.
+        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
+        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'virtualenv.py')))
 
-                # Create a configuration file for testing.
-                with open(vcs_repo_mgr.USER_CONFIG_FILE, 'w') as handle:
+    def test_git_repo(self):
+        """
+        Tests for git repository support.
+        """
+        # Instantiate a GitRepo object using a configuration file.
+        repository = self.create_repo_using_config('git', 'https://github.com/xolox/python-verboselogs.git')
+        # Test GitRepo.exists on a non existing repository.
+        self.assertEqual(repository.exists, False)
+        # Test GitRepo.create().
+        repository.create()
+        # Test GitRepo.exists on an existing repository.
+        self.assertEqual(repository.exists, True)
+        # Test GitRepo.update().
+        repository.update()
+        # Test repr(GitRepo).
+        self.assertTrue(isinstance(repr(repository), str))
+        # Test GitRepo.branches
+        self.assertTrue('master' in repository.branches)
+        for rev in repository.branches.values():
+            self.assertTrue(rev.revision_number > 0)
+            self.assertTrue(isinstance(repr(rev), str))
+            self.assertTrue(HEX_SUM_PATTERN.match(rev.revision_id))
+        # Test GitRepo.tags.
+        self.assertTrue('1.0' in repository.tags)
+        self.assertTrue('1.0.1' in repository.tags)
+        for rev in repository.tags.values():
+            self.assertTrue(rev.revision_number > 0)
+            self.assertTrue(isinstance(repr(rev), str))
+            self.assertTrue(HEX_SUM_PATTERN.match(rev.revision_id))
+        self.assertGreater(repository.tags['1.0.1'].revision_number, repository.tags['1.0'].revision_number)
+        # Test GitRepo.find_revision_id().
+        self.assertEqual(repository.find_revision_id('1.0'), 'f6b89e5314d951bba4aa876ddbeef1deeb18932c')
 
-                    # Valid repository definition.
-                    handle.write('[test]\n')
-                    handle.write('type = %s\n' % repo_type)
-                    handle.write('local = %s\n' % local_checkout)
-                    handle.write('remote = %s\n' % remote)
+    def create_repo_using_config(self, repository_type, remote_location):
+        """
+        Instantiate a :py:class:`.Repository` object by creating a temporary
+        configuration file, thereby testing both configuration file handling
+        and repository instantiation.
+        """
+        config_directory = self.mkdtemp()
+        local_checkout = self.mkdtemp()
+        vcs_repo_mgr.USER_CONFIG_FILE = os.path.join(config_directory, 'vcs-repo-mgr.ini')
+        with open(vcs_repo_mgr.USER_CONFIG_FILE, 'w') as handle:
+            # Create a valid repository definition.
+            handle.write('[test]\n')
+            handle.write('type = %s\n' % repository_type)
+            handle.write('local = %s\n' % local_checkout)
+            handle.write('remote = %s\n' % remote_location)
+            # Create the first of two duplicate definitions.
+            handle.write('[test_2]\n')
+            handle.write('type = %s\n' % repository_type)
+            handle.write('local = %s\n' % local_checkout)
+            handle.write('remote = %s\n' % remote_location)
+            # Create the second of two duplicate definitions.
+            handle.write('[test-2]\n')
+            handle.write('type = %s\n' % repository_type)
+            handle.write('local = %s\n' % local_checkout)
+            handle.write('remote = %s\n' % remote_location)
+            # Create an invalid repository definition.
+            handle.write('[unsupported-repo-type]\n')
+            handle.write('type = svn\n')
+            handle.write('local = /tmp/random-svn-checkout\n')
+        # Check the error handling in the Python API.
+        self.assertRaises(ValueError, find_configured_repository, 'non-existing')
+        self.assertRaises(ValueError, find_configured_repository, 'test-2')
+        self.assertRaises(ValueError, find_configured_repository, 'unsupported-repo-type')
+        # Test the Python API with a properly configured repository.
+        return find_configured_repository('test')
 
-                    # Duplicate repository definition #1.
-                    handle.write('[test_2]\n')
-                    handle.write('type = git\n')
-                    handle.write('local = %s\n' % local_checkout)
-                    handle.write('remote = %s\n' % REMOTE_GIT_REPO)
-
-                    # Duplicate repository definition #2.
-                    handle.write('[test-2]\n')
-                    handle.write('type = git\n')
-                    handle.write('local = %s\n' % local_checkout)
-                    handle.write('remote = %s\n' % REMOTE_GIT_REPO)
-
-                    # Invalid repository definition.
-                    handle.write('[unsupported-repo-type]\n')
-                    handle.write('type = bzr\n')
-                    handle.write('local = /tmp/random-bzr-checkout\n')
-
-                # Check error handling in Python API.
-                self.assertRaises(ValueError, find_configured_repository, 'non-existing')
-                self.assertRaises(ValueError, find_configured_repository, 'test-2')
-                self.assertRaises(ValueError, find_configured_repository, 'unsupported-repo-type')
-
-                # Test Python API with valid configured repository.
-                repository = find_configured_repository('test')
-
-                # Python API - Test repository.exists on a non existing repository.
-                self.assertEqual(repository.exists, False)
-
-                # Python API - Test repository.create().
-                repository.create()
-
-                # Python API - Test repository.exists on an existing repository.
-                self.assertEqual(repository.exists, True)
-
-                # Python API - Test repository.update().
-                repository.update()
-
-                # Python API - Test repository.__repr__().
-                self.assertTrue(isinstance(repr(repository), str))
-
-                # Python API - Test repository branches.
-                self.assertEqual(len(repository.branches), 1)
-                self.assertTrue(main_branch in repository.branches)
-                for rev in repository.branches.values():
-                    self.assertTrue(rev.branch)
-                    self.assertTrue(rev.revision_number > 0)
-                    self.assertTrue(REVISION_ID_PATTERN.match(rev.revision_id))
-                    # Test revision.__repr__().
-                    self.assertTrue(isinstance(repr(rev), str))
-
-                # Python API - Test repository export.
-                with TemporaryDirectory() as export_directory:
-                    repository.export(os.path.join(export_directory, 'subdirectory'), main_branch)
-                    self.checkExport(export_directory)
-
-                # Python API - Test repository.find_revision_number().
-                revision_number = repository.find_revision_number(main_branch)
-                self.assertEqual(type(revision_number), int)
-                self.assertTrue(revision_number > 0)
-
-                # Python API - Test repository.find_revision_id().
-                revision_id = repository.find_revision_id(main_branch)
-                self.assertTrue(REVISION_ID_PATTERN.match(revision_id))
-                try:
-                    self.assertTrue(isinstance(revision_id, unicode))
-                except NameError:
-                    self.assertTrue(isinstance(revision_id, str))
-                self.assertTrue(revision_id.startswith(repository.branches[main_branch].revision_id))
-
-                # Test command line interface with valid configured repository.
-                self.assertTrue(REVISION_NR_PATTERN.match(call('--repository=test', '--revision=%s' % main_branch, '--find-revision-number')))
-                self.assertTrue(REVISION_ID_PATTERN.match(call('--repository=test', '--revision=%s' % main_branch, '--find-revision-id')))
-                self.assertEqual(call('--repository=test', '--find-directory').strip(), local_checkout)
-                call('--repository=test', '--update')
-                with TemporaryDirectory() as export_directory:
-                    call('--repository=test', '--revision=%s' % main_branch, '--export=%s' % export_directory)
-                    self.checkExport(export_directory)
-
-    def checkExport(self, directory):
-        num_files = 0
-        for root, dirs, files in os.walk(directory):
-            num_files += len(files)
-        self.assertTrue(num_files > 0)
+    def validate_revision(self, revision, id_pattern=HEX_SUM_PATTERN):
+        """
+        Perform some generic sanity checks on :py:class:`Revision` objects.
+        """
+        self.assertTrue(revision.revision_number > 0)
+        self.assertTrue(isinstance(repr(revision), str))
+        self.assertTrue(id_pattern.match(revision.revision_id))
 
 class TemporaryDirectory(object):
 

@@ -1,11 +1,12 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: June 22, 2014
+# Last Change: September 14, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
 VIRTUAL_ENV ?= $(WORKON_HOME)/vcs-repo-mgr
+ACTIVATE = . "$(VIRTUAL_ENV)/bin/activate"
 
 default:
 	@echo 'Makefile for vcs-repo-mgr'
@@ -14,6 +15,7 @@ default:
 	@echo
 	@echo '    make install    install the package in a virtual environment'
 	@echo '    make test       run the test suite'
+	@echo '    make coverage   run the tests, report coverage'
 	@echo '    make docs       update documentation using Sphinx'
 	@echo '    make publish    publish changes to GitHub/PyPI'
 	@echo '    make clean      cleanup all temporary files'
@@ -21,13 +23,19 @@ default:
 
 install:
 	test -d "$(VIRTUAL_ENV)" || virtualenv --no-site-packages "$(VIRTUAL_ENV)"
-	test -x "$(VIRTUAL_ENV)/bin/pip-accel" || "$(VIRTUAL_ENV)/bin/easy_install" pip-accel
-	"$(VIRTUAL_ENV)/bin/pip-accel" install -r requirements.txt
-	"$(VIRTUAL_ENV)/bin/pip" uninstall -y vcs-repo-mgr || true
-	"$(VIRTUAL_ENV)/bin/pip" install --no-deps .
+	test -x "$(VIRTUAL_ENV)/bin/pip-accel" || ($(ACTIVATE) && easy_install pip-accel)
+	$(ACTIVATE) && pip-accel install -r requirements.txt
+	$(ACTIVATE) && pip uninstall -y vcs-repo-mgr || true
+	$(ACTIVATE) && pip install --no-deps .
 
-test:
-	"$(VIRTUAL_ENV)/bin/python" setup.py test
+test: install
+	$(ACTIVATE) && python setup.py test
+
+coverage: install
+	test -x "$(VIRTUAL_ENV)/bin/coverage" || ($(ACTIVATE) && pip-accel install coverage)
+	$(ACTIVATE) && coverage run --source=vcs_repo_mgr setup.py test
+	$(ACTIVATE) && coverage html --omit=vcs_repo_mgr/tests.py
+	if [ "`whoami`" != root ] && which gnome-open >/dev/null 2>&1; then gnome-open htmlcov/index.html; fi
 
 docs: install
 	"$(VIRTUAL_ENV)/bin/pip-accel" install sphinx
