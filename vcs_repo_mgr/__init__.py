@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.6.1'
+__version__ = '0.6.2'
 
 # Standard library modules.
 import functools

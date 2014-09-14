@@ -60,7 +60,7 @@ def create_local_checkout(remote):
     Create a directory for a local checkout of a remote repository.
     """
     context = hashlib.sha1()
-    context.update(remote)
+    context.update(remote.encode('utf-8'))
     key = context.hexdigest()
     if key not in LOCAL_CHECKOUTS:
         LOCAL_CHECKOUTS[key] = create_temporary_directory()
