@@ -272,7 +272,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         execution of an external command and there's really no point in doing
         this hundreds of times).
         """
-        revisions = mapping.values()
+        revisions = list(mapping.values())
         random.shuffle(revisions)
         for revision in revisions[:10]:
             self.validate_revision(revision, **kw)
