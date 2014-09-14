@@ -58,6 +58,13 @@ Supported options:
     account when generating version numbers you can make sure that your version
     number is bumped with every single change.
 
+  --vcs-control-field
+
+    Print a line containing a Debian control file field and value. The field
+    name will be one of `Vcs-Bzr', `Vcs-Hg' or `Vcs-Git'. The value will be the
+    repository's remote location and the selected revision (separated by a `#'
+    character).
+
   -u, --update
 
     Create/update the local clone of a remote repository by pulling the latest
@@ -119,7 +126,7 @@ def main():
         options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:dnisue:vh', [
             'repository=', 'rev=', 'revision=', 'find-directory',
             'find-revision-number', 'find-revision-id', 'sum-revisions',
-            'update', 'export=', 'verbose', 'help'
+            'vcs-control-field', 'update', 'export=', 'verbose', 'help'
         ])
         for option, value in options:
             if option in ('-r', '--repository'):
@@ -142,6 +149,9 @@ def main():
                 assert len(arguments) >= 2, "Please specify one or more repository/revision pairs!"
                 actions.append(functools.partial(print_summed_revisions, arguments))
                 arguments = []
+            elif option == '--vcs-control-field':
+                assert repository, "Please specify a repository first!"
+                actions.append(functools.partial(print_vcs_control_field, repository, revision))
             elif option in ('-u', '--update'):
                 assert repository, "Please specify a repository first!"
                 actions.append(functools.partial(repository.update))
@@ -182,6 +192,9 @@ def print_revision_id(repository, revision):
 
 def print_summed_revisions(arguments):
     print(sum_revision_numbers(arguments))
+
+def print_vcs_control_field(repository, revision):
+    print("%s: %s" % repository.generate_control_field(revision))
 
 def usage():
     print(__doc__.strip())

@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.6.3'
+__version__ = '0.6.4'
 
 # Standard library modules.
 import functools
@@ -330,7 +330,7 @@ class Repository(object):
         """
         raise NotImplementedError()
 
-    def find_revision_id(self, revision):
+    def find_revision_id(self, revision=None):
         """
         Find the global revision id of the given revision.
 
@@ -342,6 +342,21 @@ class Repository(object):
         .. note:: Automatically creates the local repository on the first run.
         """
         raise NotImplementedError()
+
+    def generate_control_field(self, revision=None):
+        """
+        Generate a Debian control file name/value pair for the given repository
+        and revision. This generates a ``Vcs-Bzr`` field for Bazaar_
+        repositories, a ``Vcs-Hg`` field for Mercurial_ repositories and a
+        ``Vcs-Git`` field for Git_ repositories.
+
+        :param revision: A reference to a revision, most likely the name of a
+                         branch (a string). Defaults to the latest revision in
+                         the default branch.
+        :returns: A tuple with two strings: The name of the field and the value.
+        """
+        value = "%s#%s" % (self.remote or self.local, self.find_revision_id(revision))
+        return self.control_field, value
 
     @property
     def branches(self):
@@ -461,6 +476,7 @@ class HgRepo(Repository):
 
     friendly_name = 'Mercurial'
     default_revision = 'default'
+    control_field = 'Vcs-Hg'
     create_command = 'hg clone --noupdate {remote} {local}'
     update_command = 'hg pull --repository {local} {remote}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
@@ -519,6 +535,7 @@ class GitRepo(Repository):
 
     friendly_name = 'Git'
     default_revision = 'master'
+    control_field = 'Vcs-Git'
     create_command = 'git clone --bare {remote} {local}'
     update_command = 'cd {local} && git fetch {remote}'
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
@@ -576,6 +593,7 @@ class BzrRepo(Repository):
 
     friendly_name = 'Bazaar'
     default_revision = 'last:1'
+    control_field = 'Vcs-Bzr'
     create_command = 'bzr branch --use-existing-dir {remote} {local}'
     update_command = 'cd {local} && bzr pull {remote}'
     export_command = 'cd {local} && bzr export --revision={revision} {directory}'
