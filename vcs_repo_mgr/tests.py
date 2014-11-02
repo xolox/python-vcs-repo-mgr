@@ -1,7 +1,7 @@
 # Automated tests for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: September 14, 2014
+# Last Change: November 2, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -15,19 +15,17 @@ import sys
 import tempfile
 import unittest
 
-try:
-    # Python 2.x.
-    from StringIO import StringIO
-except ImportError:
-    # Python 3.x.
-    from io import StringIO
-
 # External dependencies.
 import coloredlogs
+from six.moves import StringIO
 
 # The module we're testing.
 import vcs_repo_mgr
-from vcs_repo_mgr import GitRepo, find_configured_repository, limit_vcs_updates
+from vcs_repo_mgr import (
+        AmbiguousRepositoryNameError, coerce_repository,
+        find_configured_repository, GitRepo, HgRepo, limit_vcs_updates,
+        NoSuchRepositoryError, UnknownRepositoryTypeError,
+)
 from vcs_repo_mgr.cli import main
 
 # Initialize a logger.
@@ -93,6 +91,21 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
         self.assertRaises(Exception, GitRepo, local=non_existing_repo)
 
+    def test_repository_coercion(self):
+        """
+        Test that auto vivification of repositories is supported.
+        """
+        # Test argument type checking.
+        self.assertRaises(ValueError, coerce_repository, None)
+        # Test auto vivification of git repositories.
+        repository = coerce_repository('https://github.com/xolox/python-vcs-repo-mgr.git')
+        self.assertTrue('0.5' in repository.tags)
+        # Test auto vivification of other repositories.
+        repository = coerce_repository('hg+%s' % REMOTE_HG_REPO)
+        self.assertTrue(isinstance(repository, HgRepo))
+        # Test that Repository objects pass through untouched.
+        self.assertTrue(repository is coerce_repository(repository))
+
     def test_command_line_interface(self):
         """
         Test the command line interface.
@@ -111,13 +124,15 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(os.path.join(export_directory, 'setup.py'))
         self.assertTrue(os.path.join(export_directory, 'verboselogs.py'))
 
-    def test_revision_number_summing(self):
+    def test_a_revision_number_summing(self):
         """
         Test summing of local revision numbers.
         """
         self.create_repo_using_config('git', REMOTE_GIT_REPO, 'hg', REMOTE_HG_REPO)
         output = call('--sum-revisions', 'test', '1.0', 'second', '1.2')
         self.assertEqual(output.strip(), '125')
+        # An uneven number of arguments should report an error.
+        self.assertRaises(SystemExit, call, '--sum-revisions', 'test', '1.0', 'second')
 
     def test_hg_repo(self):
         """
@@ -250,9 +265,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             handle.write('type = svn\n')
             handle.write('local = /tmp/random-svn-checkout\n')
         # Check the error handling in the Python API.
-        self.assertRaises(ValueError, find_configured_repository, 'non-existing')
-        self.assertRaises(ValueError, find_configured_repository, 'test-2')
-        self.assertRaises(ValueError, find_configured_repository, 'unsupported-repo-type')
+        self.assertRaises(NoSuchRepositoryError, find_configured_repository, 'non-existing')
+        self.assertRaises(AmbiguousRepositoryNameError, find_configured_repository, 'test-2')
+        self.assertRaises(UnknownRepositoryTypeError, find_configured_repository, 'unsupported-repo-type')
         # Test the Python API with a properly configured repository.
         return find_configured_repository('test')
 

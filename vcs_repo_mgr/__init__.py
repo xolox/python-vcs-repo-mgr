@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: September 14, 2014
+# Last Change: November 2, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.6.4'
+__version__ = '0.7'
 
 # Standard library modules.
 import functools
@@ -42,18 +42,15 @@ import logging
 import os
 import pipes
 import re
+import tempfile
 import time
-
-try:
-    # Python 2.x.
-    import ConfigParser as configparser
-except ImportError:
-    # Python 3.x.
-    import configparser
 
 # External dependencies.
 from executor import execute
 from humanfriendly import concatenate, format_path
+from six import string_types
+from six.moves import configparser
+from six.moves import urllib_parse as urlparse
 
 # Known configuration file locations.
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
@@ -67,6 +64,49 @@ logger = logging.getLogger(__name__)
 
 # Inject our logger into all execute() calls.
 execute = functools.partial(execute, logger=logger)
+
+def coerce_repository(value):
+    """
+    Convert a string (taken to be a repository name or URL) to a
+    :py:class:`Repository` object.
+
+    :param value: The name or URL of a repository (a string or a
+                  :py:class:`Repository` object).
+    :returns: A :py:class:`Repository` object.
+    :raises: :py:exc:`exceptions.ValueError` when the given ``value`` is not a
+             string or a :py:class:`Repository` object or if the value is a string but
+             doesn't match the name of any configured repository and also can't
+             be parsed as the location of a remote repository.
+    """
+    # Repository objects pass through untouched.
+    if isinstance(value, Repository):
+        return value
+    # We expect a string with a name or URL.
+    if not isinstance(value, string_types):
+        msg = "Expected string or Repository object as argument, got %s instead!"
+        raise ValueError(msg % type(value))
+    # If the string matches the name of a configured repository we'll return that.
+    try:
+        return find_configured_repository(value)
+    except NoSuchRepositoryError:
+        pass
+    # At this point we'll assume the string is the location of a remote
+    # repository. First lets see if the repository type is prefixed to the
+    # remote location with a `+' in between (pragmatic but ugly :-).
+    vcs_type, _, remote = value.partition('+')
+    if vcs_type and remote:
+        try:
+            return repository_factory(vcs_type, local=find_cache_directory(remote), remote=remote)
+        except UnknownRepositoryTypeError:
+            pass
+    # Check for remote locations that end with the suffix `.git' (fairly common).
+    if value.endswith('.git'):
+        return GitRepo(local=find_cache_directory(value), remote=value)
+    # If all else fails, at least give a clear explanation of the problem.
+    msg = ("The string %r doesn't match the name of any configured repository"
+           " and it also can't be parsed as the location of a remote"
+           " repository! (maybe you forgot to prefix the type?)")
+    raise ValueError(msg % value)
 
 def find_configured_repository(name):
     """
@@ -93,6 +133,12 @@ def find_configured_repository(name):
 
     :param name: The name of the repository (a string).
     :returns: A :py:class:`Repository` object.
+    :raises: :py:exc:`NoSuchRepositoryError` when the given repository name
+             doesn't match any of the configured repositories.
+    :raises: :py:exc:`AmbiguousRepositoryNameError` when the given repository
+             name is ambiguous (i.e. it matches multiple repository names).
+    :raises: :py:exp:`UnknownRepositoryTypeError` when a repository definition
+             with an unknown type is encountered.
     """
     parser = configparser.RawConfigParser()
     for config_file in [SYSTEM_CONFIG_FILE, USER_CONFIG_FILE]:
@@ -102,21 +148,43 @@ def find_configured_repository(name):
     matching_repos = [r for r in parser.sections() if normalize_name(name) == normalize_name(r)]
     if not matching_repos:
         msg = "No repositories found matching the name %r!"
-        raise ValueError(msg % name)
+        raise NoSuchRepositoryError(msg % name)
     elif len(matching_repos) != 1:
         msg = "Multiple repositories found matching the name %r! (%s)"
-        raise ValueError(msg % (name, concatenate(map(repr, matching_repos))))
+        raise AmbiguousRepositoryNameError(msg % (name, concatenate(map(repr, matching_repos))))
     else:
         options = dict(parser.items(matching_repos[0]))
         vcs_type = options.get('type', '').lower()
-        if vcs_type in ('hg', 'mercurial'):
-            return HgRepo(local=options.get('local'), remote=options.get('remote'))
-        elif vcs_type == 'git':
-            return GitRepo(local=options.get('local'), remote=options.get('remote'))
-        elif vcs_type in ('bzr', 'bazaar'):
-            return BzrRepo(local=options.get('local'), remote=options.get('remote'))
-        else:
-            raise ValueError("VCS type not supported! (%s)" % vcs_type)
+        return repository_factory(vcs_type,
+                                  local=options.get('local'),
+                                  remote=options.get('remote'))
+
+def repository_factory(vcs_type, **kw):
+    """
+    Instantiate a :py:class:`Repository` object based on the given type and arguments.
+
+    :param vcs_type: One of the strings 'bazaar', 'bzr', 'git', 'hg' or 'mercurial'.
+    :param kw: The keyword arguments to :py:func:`Repository.__init__()`.
+    :returns: A :py:class:`Repository` object.
+    :raises: :py:exc:`UnknownRepositoryTypeError` when the given type is unknown.
+    """
+    if vcs_type in ('bzr', 'bazaar'):
+        return BzrRepo(**kw)
+    elif vcs_type == 'git':
+        return GitRepo(**kw)
+    elif vcs_type in ('hg', 'mercurial'):
+        return HgRepo(**kw)
+    else:
+        raise UnknownRepositoryTypeError("Unknown VCS repository type! (%r)" % vcs_type)
+
+def find_cache_directory(remote):
+    """
+    Find the directory where temporary local checkouts are to be stored.
+
+    :returns: The absolute pathname of a directory (a string).
+    """
+    return os.path.join('/var/cache/vcs-repo-mgr' if os.access('/var/cache', os.W_OK) else tempfile.gettempdir(),
+                        urlparse.quote(remote, safe=''))
 
 def normalize_name(name):
     """
@@ -128,19 +196,6 @@ def normalize_name(name):
     :returns: The normalized repository name (a string).
     """
     return re.sub('[^a-z0-9]', '', name.lower())
-
-def cast_to_repo(value):
-    """
-    Convert a string (taken to be a repository name) to a
-    :py:class:`Repository` object.
-
-    :param value: The name of a repository (a string or a
-                  :py:class:`Repository` object).
-    :returns: A :py:class:`Repository` object.
-    """
-    if not isinstance(value, Repository):
-        value = find_configured_repository(value)
-    return value
 
 def sum_revision_numbers(arguments):
     """
@@ -158,7 +213,7 @@ def sum_revision_numbers(arguments):
         raise ValueError("Please provide an even number of arguments! (one or more repository/revision pairs)")
     summed_revision_number = 0
     while arguments:
-        repository = cast_to_repo(arguments.pop(0))
+        repository = coerce_repository(arguments.pop(0))
         summed_revision_number += repository.find_revision_number(arguments.pop(0))
     return summed_revision_number
 
@@ -191,9 +246,7 @@ class Repository(object):
 
     def __init__(self, local=None, remote=None):
         """
-        Initialize a version control repository interface. Raises
-        :py:exc:`exceptions.ValueError` if the local repository doesn't exist
-        and no remote repository is specified.
+        Initialize a version control repository interface.
 
         :param local: The pathname of the directory where the local clone of
                       the repository is stored (a string). This directory
@@ -202,6 +255,8 @@ class Repository(object):
         :param remote: The URL of the remote repository (a string). If this is
                        not given then the local directory must already exist
                        and contain a supported repository.
+        :raises: :py:exc:`exceptions.ValueError` if the local repository
+                 doesn't exist and no remote repository is specified.
         """
         self.local = local
         self.remote = remote
@@ -664,5 +719,23 @@ class BzrRepo(Repository):
                 yield Revision(repository=self,
                                revision_id=tokens[1],
                                tag=tokens[0])
+
+class NoSuchRepositoryError(Exception):
+    """
+    Exception raised by :py:func:`find_configured_repository()` when the given
+    repository name doesn't match any of the configured repositories.
+    """
+
+class AmbiguousRepositoryNameError(Exception):
+    """
+    Exception raised by :py:func:`find_configured_repository()` when the given
+    repository name is ambiguous (i.e. it matches multiple repository names).
+    """
+
+class UnknownRepositoryTypeError(Exception):
+    """
+    Exception raised by :py:func:`find_configured_repository()` when it
+    encounters a repository definition with an unknown type.
+    """
 
 # vim: ts=4 sw=4 et

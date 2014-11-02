@@ -1,7 +1,7 @@
 # Command line interface for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: September 14, 2014
+# Last Change: November 2, 2014
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -13,11 +13,16 @@ Mercurial and Git repositories.
 
 Supported options:
 
-  -r, --repository=REPOSITORY_NAME
+  -r, --repository=REPOSITORY
 
     Select a repository to operate on by providing the name of a repository
     defined in one of the configuration files ~/.vcs-repo-mgr.ini and
     /etc/vcs-repo-mgr.ini.
+
+    Alternatively the location of a remote repository can be given. The
+    location should be prefixed by the type of the repository (with a `+' in
+    between) unless the location ends in `.git' in which case the prefix is
+    optional.
 
   --rev, --revision=REVISION
 
@@ -95,7 +100,6 @@ Supported options:
 import functools
 import getopt
 import logging
-import os
 import sys
 
 # External dependencies.
@@ -103,7 +107,7 @@ import coloredlogs
 from executor import execute
 
 # Modules included in our package.
-from vcs_repo_mgr import find_configured_repository, sum_revision_numbers
+from vcs_repo_mgr import coerce_repository, sum_revision_numbers
 
 # Initialize a logger.
 logger = logging.getLogger(__name__)
@@ -130,9 +134,9 @@ def main():
         ])
         for option, value in options:
             if option in ('-r', '--repository'):
-                name = value.strip()
-                assert name, "Please specify the name of a repository! (using -r, --repository)"
-                repository = find_configured_repository(name)
+                value = value.strip()
+                assert value, "Please specify the name of a repository! (using -r, --repository)"
+                repository = coerce_repository(value)
             elif option in ('--rev', '--revision'):
                 revision = value.strip()
                 assert revision, "Please specify a nonempty revision string!"

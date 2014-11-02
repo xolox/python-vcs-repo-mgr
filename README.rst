@@ -33,33 +33,98 @@ You now have the ``vcs-tool`` command available:
 
   .. code-block:: sh
 
-     peter@macbook> vcs-tool --help
-     Usage: vcs-tool [OPTIONS]
+     Usage: vcs-tool [OPTIONS] [ARGS]
+
+     Command line program to perform common operations (in the context of
+     packaging/deployment) on version control repositories. Supports Bazaar,
+     Mercurial and Git repositories.
 
      Supported options:
 
-       -r, --repository=NAME       name of configured repository
-           --rev, --revision=REV   revision to export (used in combination
-                                   with the options -n, -i and -e)
-       -d, --find-directory        print the absolute path of the local repository
-       -n, --find-revision-number  find the local revision number of the revision
-                                   given with --rev
-       -i, --find-revision-id      find the global revision id of the revision
-                                   given with --rev
-       -u, --update                update local clone of repository by
-                                   pulling latest changes from remote
-                                   repository
-       -e, --export=DIR            export contents of repository to
-                                   directory (used in combination
-                                   with --revision)
-       -v, --verbose               make more noise
-       -h, --help                  show this message and exit
+       -r, --repository=REPOSITORY
 
-     The value of --revision defaults to `last:1' for Bazaar repositories,
-     `master' for git repositories and `default' for Mercurial repositories.
+         Select a repository to operate on by providing the name of a repository
+         defined in one of the configuration files ~/.vcs-repo-mgr.ini and
+         /etc/vcs-repo-mgr.ini.
 
-Before you can use the ``vcs-tool`` command you have to create a configuration
-file:
+         Alternatively the location of a remote repository can be given. The
+         location should be prefixed by the type of the repository (with a '+' in
+         between) unless the location ends in '.git' in which case the prefix is
+         optional.
+
+       --rev, --revision=REVISION
+
+         Select a revision to operate on. Accepts any string that's supported by the
+         VCS system that manages the repository, which means you can provide branch
+         names, tag names, exact revision ids, etc. This option is used in
+         combination with the --find-revision-number, --find-revision-id and
+         --export options.
+
+         If this option is not provided a default revision is selected: 'last:1' for
+         Bazaar repositories, 'master' for git repositories and 'default' (not
+         'tip'!) for Mercurial repositories.
+
+       -n, --find-revision-number
+
+         Print the local revision number (an integer) of the revision given with the
+         --revision option. Revision numbers are useful as a build number or when a
+         simple, incrementing version number is required. Revision numbers should
+         not be used to unambiguously refer to a revision (use revision ids for that
+         instead). This option is used in combination with the --repository and
+         --revision options.
+
+       -i, --find-revision-id
+
+         Print the global revision id (a string) of the revision given with the
+         --revision option. Global revision ids are useful to unambiguously refer to
+         a revision. This option is used in combination with the --repository and
+         --revision options.
+
+       -s, --sum-revisions
+
+         Print the summed revision numbers of multiple repository/revision pairs.
+         The repository/revision pairs are taken from the positional arguments to
+         vcs-repo-mgr.
+
+         This is useful when you're building a package based on revisions from
+         multiple VCS repositories. By taking changes in all repositories into
+         account when generating version numbers you can make sure that your version
+         number is bumped with every single change.
+
+       --vcs-control-field
+
+         Print a line containing a Debian control file field and value. The field
+         name will be one of 'Vcs-Bzr', 'Vcs-Hg' or 'Vcs-Git'. The value will be the
+         repository's remote location and the selected revision (separated by a '#'
+         character).
+
+       -u, --update
+
+         Create/update the local clone of a remote repository by pulling the latest
+         changes from the remote repository. This option is used in combination with
+         the --repository option.
+
+       -e, --export=DIRECTORY
+
+         Export the contents of a specific revision of a repository to a local
+         directory. This option is used in combination with the --repository and
+         --revision options.
+
+       -d, --find-directory
+
+         Print the absolute pathname of a local repository. This option is used in
+         combination with the --repository option.
+
+       -v, --verbose
+
+         Make more noise.
+
+       -h, --help
+
+         Show this message and exit.
+
+The primary way to use the ``vcs-tool`` command requires you to create a
+configuration file:
 
   .. code-block:: sh
 
@@ -69,6 +134,10 @@ file:
      local = /tmp/coloredlogs
      remote = git@github.com:xolox/python-coloredlogs.git
      EOF
+
+Because the ``-r``, ``--repository`` option accepts remote repository locations
+in addition to names it's not actually required to create a configuration file.
+Of course this depends on your use case(s).
 
 Below are some examples of the command line interface. If you're interested in
 using the Python API please refer to the `online documentation`_.
