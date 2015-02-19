@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.8'
+__version__ = '0.9'
 
 # Standard library modules.
 import functools
@@ -49,7 +49,7 @@ import time
 # External dependencies.
 from executor import execute
 from humanfriendly import concatenate, format_path
-from natsort import natsort
+from natsort import natsort, natsort_key
 from six import string_types
 from six.moves import configparser
 from six.moves import urllib_parse as urlparse
@@ -473,6 +473,21 @@ class Repository(object):
         return dict((r.branch, r) for r in self.find_branches())
 
     @property
+    def ordered_branches(self):
+        """
+        Find information about the branches in the version control repository.
+
+        :returns: An ordered :py:class:`list` of :py:class:`Revision` objects.
+                  The list is ordered by performing a `natural order sort
+                  <https://pypi.python.org/pypi/naturalsort>`_ of branch names
+                  in ascending order (i.e. the first value is the "oldest"
+                  branch and the last value is the "newest" branch).
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        return natsort(self.branches.values(), key=operator.attrgetter('branch'))
+
+    @property
     def tags(self):
         """
         Find information about the tags in the version control repository.
@@ -486,7 +501,76 @@ class Repository(object):
         return dict((r.tag, r) for r in self.find_tags())
 
     @property
+    def ordered_tags(self):
+        """
+        Find information about the tags in the version control repository.
+
+        :returns: An ordered :py:class:`list` of :py:class:`Revision` objects.
+                  The list is ordered by performing a `natural order sort
+                  <https://pypi.python.org/pypi/naturalsort>`_ of tag names
+                  in ascending order (i.e. the first value is the "oldest"
+                  tag and the last value is the "newest" tag).
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        return natsort(self.tags.values(), key=operator.attrgetter('tag'))
+
+    @property
     def releases(self):
+        """
+        Find information about the releases in the version control repository.
+
+        :returns: A :py:class:`dict` with release identifiers (strings) as keys
+                  and :py:class:`Release` objects as values.
+
+        .. note:: Automatically creates the local repository on the first run.
+
+        Here's a simple example based on the public git repository of the
+        vcs-repo-mgr project:
+
+        >>> from vcs_repo_mgr import coerce_repository
+        >>> from pprint import pprint
+        >>> repository = coerce_repository('https://github.com/xolox/python-vcs-repo-mgr.git')
+        >>> pprint(repository.releases)
+        {'0.1':   Release(revision=Revision(...), identifier='0.1'  ),
+         '0.1.1': Release(revision=Revision(...), identifier='0.1.1'),
+         '0.1.2': Release(revision=Revision(...), identifier='0.1.2'),
+         '0.1.3': Release(revision=Revision(...), identifier='0.1.3'),
+         '0.1.4': Release(revision=Revision(...), identifier='0.1.4'),
+         '0.1.5': Release(revision=Revision(...), identifier='0.1.5'),
+         '0.2':   Release(revision=Revision(...), identifier='0.2'  ),
+         '0.2.1': Release(revision=Revision(...), identifier='0.2.1'),
+         '0.2.2': Release(revision=Revision(...), identifier='0.2.2'),
+         '0.2.3': Release(revision=Revision(...), identifier='0.2.3'),
+         '0.2.4': Release(revision=Revision(...), identifier='0.2.4'),
+         '0.3':   Release(revision=Revision(...), identifier='0.3'  ),
+         '0.3.1': Release(revision=Revision(...), identifier='0.3.1'),
+         '0.3.2': Release(revision=Revision(...), identifier='0.3.2'),
+         '0.4':   Release(revision=Revision(...), identifier='0.4'  ),
+         '0.5':   Release(revision=Revision(...), identifier='0.5'  ),
+         '0.6':   Release(revision=Revision(...), identifier='0.6'  ),
+         '0.6.1': Release(revision=Revision(...), identifier='0.6.1'),
+         '0.6.2': Release(revision=Revision(...), identifier='0.6.2'),
+         '0.6.3': Release(revision=Revision(...), identifier='0.6.3'),
+         '0.6.4': Release(revision=Revision(...), identifier='0.6.4'),
+         '0.7':   Release(revision=Revision(...), identifier='0.7'  )}
+        """
+        available_releases = {}
+        available_revisions = getattr(self, self.release_scheme)
+        for identifier, revision in available_revisions.items():
+            match = self.release_filter.match(identifier)
+            if match:
+                # If the regular expression contains a capturing group we
+                # set the release identifier to the captured substring
+                # instead of the complete tag/branch identifier.
+                captures = match.groups()
+                if captures:
+                    identifier = captures[0]
+                available_releases[identifier] = Release(revision=revision, identifier=identifier)
+        return available_releases
+
+    @property
+    def ordered_releases(self):
         """
         Find information about the releases in the version control repository.
 
@@ -498,50 +582,30 @@ class Repository(object):
                   "release").
 
         .. note:: Automatically creates the local repository on the first run.
-
-        Here's a simple example based on the public git repository of the
-        vcs-repo-mgr project:
-
-        >>> from vcs_repo_mgr import coerce_repository
-        >>> from pprint import pprint
-        >>> repository = coerce_repository('https://github.com/xolox/python-vcs-repo-mgr.git')
-        >>> pprint(repository.releases)
-        [Release(revision=Revision(repository=..., tag='0.1', revision_id='3edc99c35101691b473557888d5704e2ba8e1021'), identifier='0.1'),
-         Release(revision=Revision(repository=..., tag='0.1.1', revision_id='e1eb2b0c272d590cbff1b0ded4ff17a2fec0ff13'), identifier='0.1.1'),
-         Release(revision=Revision(repository=..., tag='0.1.2', revision_id='7376cf58331ac1b0eec1b05a4092523249f8026e'), identifier='0.1.2'),
-         Release(revision=Revision(repository=..., tag='0.1.3', revision_id='f87a7c979be106f68f957cc3cc3b9b68d8a41e4f'), identifier='0.1.3'),
-         Release(revision=Revision(repository=..., tag='0.1.4', revision_id='dfdfc9b953e1603e983c2e42585c2b1c9caa45f2'), identifier='0.1.4'),
-         Release(revision=Revision(repository=..., tag='0.1.5', revision_id='c09c283ea7283aa2bfae1a44c7365e08ca2fdf24'), identifier='0.1.5'),
-         Release(revision=Revision(repository=..., tag='0.2', revision_id='0bbea108dbe341b0370d5a9e6ae71bf19af22a6c'), identifier='0.2'),
-         Release(revision=Revision(repository=..., tag='0.2.1', revision_id='3a9834e6ac67135ba306f5c8ba6df6f7c88f08fd'), identifier='0.2.1'),
-         Release(revision=Revision(repository=..., tag='0.2.2', revision_id='f68c494d4b67f308226250389060c805c7854c06'), identifier='0.2.2'),
-         Release(revision=Revision(repository=..., tag='0.2.3', revision_id='443b2edc1b1bbb7ef2699490fd2792d1a027385a'), identifier='0.2.3'),
-         Release(revision=Revision(repository=..., tag='0.2.4', revision_id='08ff87a94e210ae1b462222d491ba9e7265a92b1'), identifier='0.2.4'),
-         Release(revision=Revision(repository=..., tag='0.3', revision_id='242ff8a0e8beb0aa74544a6642415fc7f82cd841'), identifier='0.3'),
-         Release(revision=Revision(repository=..., tag='0.3.1', revision_id='2c6093a414ba04df15f17f311da565e8b2d771a4'), identifier='0.3.1'),
-         Release(revision=Revision(repository=..., tag='0.3.2', revision_id='338da21eef5f2f1e5e0a8d47c62f5ad0d84b7ff8'), identifier='0.3.2'),
-         Release(revision=Revision(repository=..., tag='0.4', revision_id='0b8173b5bcaebf892a77bc4a294f86a697926b81'), identifier='0.4'),
-         Release(revision=Revision(repository=..., tag='0.5', revision_id='cddfce9435318ab1d6fb8426ae74a55ea672d0d5'), identifier='0.5'),
-         Release(revision=Revision(repository=..., tag='0.6', revision_id='69576994caab3e35698f582cd2cbf5c9efb3e04c'), identifier='0.6'),
-         Release(revision=Revision(repository=..., tag='0.6.1', revision_id='dd173c9ad237b88e44f62450c8f8c4a92b99368d'), identifier='0.6.1'),
-         Release(revision=Revision(repository=..., tag='0.6.2', revision_id='6988f89d7b0024d9849b14d7a44c063e38a882c5'), identifier='0.6.2'),
-         Release(revision=Revision(repository=..., tag='0.6.3', revision_id='0f70e14148985802d5f3e4cb501f0393c0234c14'), identifier='0.6.3'),
-         Release(revision=Revision(repository=..., tag='0.6.4', revision_id='7676c7b9fec46b6c379d45825e980e70f58e8ad8'), identifier='0.6.4'),
-         Release(revision=Revision(repository=..., tag='0.7', revision_id='4fa95eee2e0b6b8b4c646e426a5ba397672ade17'), identifier='0.7')]
         """
-        available_revisions = getattr(self, self.release_scheme)
-        available_releases = []
-        for identifier, revision in available_revisions.items():
-            match = self.release_filter.match(identifier)
-            if match:
-                # If the regular expression contains a capturing group we
-                # set the release identifier to the captured substring
-                # instead of the complete tag/branch identifier.
-                captures = match.groups()
-                if captures:
-                    identifier = captures[0]
-                available_releases.append(Release(revision=revision, identifier=identifier))
-        return natsort(available_releases, key=operator.attrgetter('identifier'))
+        return natsort(self.releases.values(), key=operator.attrgetter('identifier'))
+
+    def select_release(self, highest_allowed_release):
+        """
+        Select the newest release that is not newer than the given release.
+
+        :param highest_allowed_release: The identifier of the release that sets
+                                        the upper bound for the selection (a
+                                        string).
+        :returns: The identifier of the selected release (a string).
+        :raises: :py:exc:`NoMatchingReleasesError` when no matching releases
+                 are found.
+        """
+        matching_releases = []
+        highest_allowed_key = natsort_key(highest_allowed_release)
+        for release in self.ordered_releases:
+            release_key = natsort_key(release.identifier)
+            if release_key <= highest_allowed_key:
+                matching_releases.append(release)
+        if not matching_releases:
+            msg = "No releases below or equal to %r found in repository!"
+            raise NoMatchingReleasesError(msg % highest_allowed_release)
+        return matching_releases[-1]
 
     def find_branches(self):
         """
@@ -894,6 +958,12 @@ class UnknownRepositoryTypeError(Exception):
     """
     Exception raised by :py:func:`find_configured_repository()` when it
     encounters a repository definition with an unknown type.
+    """
+
+class NoMatchingReleasesError(Exception):
+    """
+    Exception raised by :py:func:`Repository.select_release()` when no matching
+    releases are found in the repository.
     """
 
 # vim: ts=4 sw=4 et

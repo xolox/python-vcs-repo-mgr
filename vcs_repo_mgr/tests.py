@@ -24,7 +24,8 @@ import vcs_repo_mgr
 from vcs_repo_mgr import (
         AmbiguousRepositoryNameError, coerce_repository,
         find_configured_repository, GitRepo, HgRepo, limit_vcs_updates,
-        NoSuchRepositoryError, UnknownRepositoryTypeError,
+        NoMatchingReleasesError, NoSuchRepositoryError,
+        UnknownRepositoryTypeError
 )
 from vcs_repo_mgr.cli import main
 
@@ -35,6 +36,8 @@ logger = logging.getLogger(__name__)
 REMOTE_BZR_REPO = 'lp:python-apt'
 REMOTE_GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
 REMOTE_HG_REPO = 'https://bitbucket.org/ianb/virtualenv'
+OUR_PUBLIC_REPO = 'https://github.com/xolox/python-vcs-repo-mgr.git'
+PIP_ACCEL_REPO = 'https://github.com/paylogic/pip-accel.git'
 
 # We need these in multiple places.
 DIGITS_PATTERN = re.compile('^[0-9]+$')
@@ -104,13 +107,13 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test argument type checking.
         self.assertRaises(ValueError, coerce_repository, None)
         # Test auto vivification of git repositories.
-        repository = coerce_repository('https://github.com/xolox/python-vcs-repo-mgr.git')
+        repository = coerce_repository(OUR_PUBLIC_REPO)
         self.assertTrue('0.5' in repository.tags)
         # Test auto vivification of other repositories.
         repository = coerce_repository('hg+%s' % REMOTE_HG_REPO)
         self.assertTrue(isinstance(repository, HgRepo))
         # Test that type prefix parsing swallows UnknownRepositoryTypeError.
-        self.assertRaises(ValueError, coerce_repository, 'https://github.com/xolox/python-vcs-repo-mgr.git+with-a-plus-in-the-middle')
+        self.assertRaises(ValueError, coerce_repository, '%s+with-a-plus-in-the-middle' % OUR_PUBLIC_REPO)
         # Test that Repository objects pass through untouched.
         self.assertTrue(repository is coerce_repository(repository))
 
@@ -240,12 +243,51 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_release_objects(self):
         """
-        Test creation of Release objects.
+        Test creation and ordering of Release objects.
         """
         repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
         self.assertTrue(len(repository.releases) > 0)
-        for release in repository.releases:
+        for identifier, release in repository.releases.items():
+            self.assertEqual(identifier, release.identifier)
             self.assertEqual(release.identifier, release.revision.tag)
+
+    def test_revision_ordering(self):
+        """
+        Test ordering of tags and releases.
+        """
+        repository = coerce_repository(PIP_ACCEL_REPO)
+        def find_tag_index(looking_for_tag):
+            for i, revision in enumerate(repository.ordered_tags):
+                if revision.tag == looking_for_tag:
+                    return i
+            raise Exception("Failed to find tag by name!")
+        # Regular sorting would screw up the order of the following two
+        # examples so this is testing that the natural order sorting of tags
+        # works as expected (Do What I Mean :-).
+        self.assertTrue(find_tag_index('0.2') < find_tag_index('0.10'))
+        self.assertTrue(find_tag_index('0.18') < find_tag_index('0.20'))
+        def find_release_index(looking_for_release):
+            for i, release in enumerate(repository.ordered_releases):
+                if release.identifier == looking_for_release:
+                    return i
+            raise Exception("Failed to find tag by name!")
+        self.assertTrue(find_release_index('0.2') < find_release_index('0.10'))
+        self.assertTrue(find_release_index('0.18') < find_release_index('0.20'))
+
+    def test_release_selection(self):
+        """
+        Test the selection of appropriate releases.
+        """
+        repository = coerce_repository(PIP_ACCEL_REPO)
+        # Exact matches should always be honored (obviously :-).
+        self.assertEqual(repository.select_release('0.2').identifier, '0.2')
+        # If e.g. a major.minor.PATCH release is not available, the release
+        # immediately below that should be selected (in this case: same
+        # major.minor but different PATCH level).
+        self.assertEqual(repository.select_release('0.19.5').identifier, '0.19.3')
+        # If no releases are available a known and documented exception should
+        # be raised.
+        self.assertRaises(NoMatchingReleasesError, repository.select_release, '0.0.1')
 
     def create_repo_using_config(self, repository_type, remote_location, second_repository_type=None, second_remote_location=None):
         """
