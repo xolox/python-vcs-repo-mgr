@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: November 2, 2014
+# Last Change: February 19, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -34,11 +34,12 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.7'
+__version__ = '0.8'
 
 # Standard library modules.
 import functools
 import logging
+import operator
 import os
 import pipes
 import re
@@ -48,6 +49,7 @@ import time
 # External dependencies.
 from executor import execute
 from humanfriendly import concatenate, format_path
+from natsort import natsort
 from six import string_types
 from six.moves import configparser
 from six.moves import urllib_parse as urlparse
@@ -125,6 +127,8 @@ def find_configured_repository(name):
        type = git
        local = /home/peter/projects/vcs-repo-mgr
        remote = git@github.com:xolox/python-vcs-repo-mgr.git
+       release-scheme = tags
+       release-filter = .*
 
     Three VCS types are currently supported: ``hg`` (``mercurial`` is also
     accepted), ``git`` and ``bzr`` (``bazaar`` is also accepted). If an
@@ -157,7 +161,9 @@ def find_configured_repository(name):
         vcs_type = options.get('type', '').lower()
         return repository_factory(vcs_type,
                                   local=options.get('local'),
-                                  remote=options.get('remote'))
+                                  remote=options.get('remote'),
+                                  release_scheme=options.get('release-scheme'),
+                                  release_filter=options.get('release-filter'))
 
 def repository_factory(vcs_type, **kw):
     """
@@ -244,7 +250,7 @@ class Repository(object):
     directly, use :py:class:`HgRepo` and/or :py:class:`GitRepo` instead.
     """
 
-    def __init__(self, local=None, remote=None):
+    def __init__(self, local=None, remote=None, release_scheme=None, release_filter=None):
         """
         Initialize a version control repository interface.
 
@@ -255,14 +261,54 @@ class Repository(object):
         :param remote: The URL of the remote repository (a string). If this is
                        not given then the local directory must already exist
                        and contain a supported repository.
-        :raises: :py:exc:`exceptions.ValueError` if the local repository
-                 doesn't exist and no remote repository is specified.
+        :param release_scheme: One of the strings 'tags' (the default) or
+                               'branches'. This determines whether
+                               :py:attr:`Repository.releases` is based on
+                               :py:attr:`Repository.tags` or
+                               :py:attr:`Repository.branches`.
+        :param release_filter: A string containing a regular expression or the
+                               result of :py:func:`re.compile()`. The regular
+                               expression is used by
+                               :py:attr:`Repository.releases` to match tags or
+                               branches that signify "releases". If the regular
+                               expression contains a single capture group, the
+                               identifier of a :py:class:`Release` object is
+                               set to the substring captured by the capture
+                               group (instead of the complete tag or branch
+                               name). This defaults to the regular expression
+                               ``.*`` matching any branch or tag name.
+        :raises: :py:exc:`exceptions.ValueError` for any of the following:
+
+                 - The local repository doesn't exist and no remote repository
+                   is specified.
+                 - The given release scheme is not 'tags' or 'branches'.
+                 - The release filter regular expression contains more than one
+                   capture group (if you need additional groups but without the
+                   capturing aspect use a non-capturing group).
         """
         self.local = local
         self.remote = remote
+        self.release_scheme = release_scheme or 'tags'
+        self.release_filter = release_filter or '.*'
         if not (self.exists or self.remote):
+            # Make sure we know how to get access to (a copy of) the repository.
             msg = "Local repository (%r) doesn't exist and no remote repository specified!"
             raise ValueError(msg % self.local)
+        # Make sure the release scheme was properly specified.
+        known_release_schemes = ('branches', 'tags')
+        if self.release_scheme not in known_release_schemes:
+            msg = "Release scheme %r is not supported! (valid options are %s)"
+            raise ValueError(msg % (self.release_scheme, concatenate(map(repr, known_release_schemes))))
+        # Make sure the release filter is a valid regular expression. This code
+        # is written so that callers can pass in their own compiled regular
+        # expression if they want to do that.
+        if isinstance(self.release_filter, string_types):
+            self.release_filter = re.compile(self.release_filter)
+        # At this point we should be dealing with a regular expression object:
+        # Make sure the regular expression has zero or one capture group.
+        if self.release_filter.groups > 1:
+            msg = "Release filter regular expression pattern is expected to have zero or one capture group, but it has %i instead!"
+            raise ValueError(msg % self.release_filter.groups)
 
     @property
     def vcs_directory(self):
@@ -439,9 +485,71 @@ class Repository(object):
         self.create()
         return dict((r.tag, r) for r in self.find_tags())
 
+    @property
+    def releases(self):
+        """
+        Find information about the releases in the version control repository.
+
+        :returns: An ordered :py:class:`list` of :py:class:`Release` objects.
+                  The list is ordered by performing a `natural order sort
+                  <https://pypi.python.org/pypi/naturalsort>`_ of release
+                  identifiers in ascending order (i.e. the first value is the
+                  "oldest" release and the last value is the newest
+                  "release").
+
+        .. note:: Automatically creates the local repository on the first run.
+
+        Here's a simple example based on the public git repository of the
+        vcs-repo-mgr project:
+
+        >>> from vcs_repo_mgr import coerce_repository
+        >>> from pprint import pprint
+        >>> repository = coerce_repository('https://github.com/xolox/python-vcs-repo-mgr.git')
+        >>> pprint(repository.releases)
+        [Release(revision=Revision(repository=..., tag='0.1', revision_id='3edc99c35101691b473557888d5704e2ba8e1021'), identifier='0.1'),
+         Release(revision=Revision(repository=..., tag='0.1.1', revision_id='e1eb2b0c272d590cbff1b0ded4ff17a2fec0ff13'), identifier='0.1.1'),
+         Release(revision=Revision(repository=..., tag='0.1.2', revision_id='7376cf58331ac1b0eec1b05a4092523249f8026e'), identifier='0.1.2'),
+         Release(revision=Revision(repository=..., tag='0.1.3', revision_id='f87a7c979be106f68f957cc3cc3b9b68d8a41e4f'), identifier='0.1.3'),
+         Release(revision=Revision(repository=..., tag='0.1.4', revision_id='dfdfc9b953e1603e983c2e42585c2b1c9caa45f2'), identifier='0.1.4'),
+         Release(revision=Revision(repository=..., tag='0.1.5', revision_id='c09c283ea7283aa2bfae1a44c7365e08ca2fdf24'), identifier='0.1.5'),
+         Release(revision=Revision(repository=..., tag='0.2', revision_id='0bbea108dbe341b0370d5a9e6ae71bf19af22a6c'), identifier='0.2'),
+         Release(revision=Revision(repository=..., tag='0.2.1', revision_id='3a9834e6ac67135ba306f5c8ba6df6f7c88f08fd'), identifier='0.2.1'),
+         Release(revision=Revision(repository=..., tag='0.2.2', revision_id='f68c494d4b67f308226250389060c805c7854c06'), identifier='0.2.2'),
+         Release(revision=Revision(repository=..., tag='0.2.3', revision_id='443b2edc1b1bbb7ef2699490fd2792d1a027385a'), identifier='0.2.3'),
+         Release(revision=Revision(repository=..., tag='0.2.4', revision_id='08ff87a94e210ae1b462222d491ba9e7265a92b1'), identifier='0.2.4'),
+         Release(revision=Revision(repository=..., tag='0.3', revision_id='242ff8a0e8beb0aa74544a6642415fc7f82cd841'), identifier='0.3'),
+         Release(revision=Revision(repository=..., tag='0.3.1', revision_id='2c6093a414ba04df15f17f311da565e8b2d771a4'), identifier='0.3.1'),
+         Release(revision=Revision(repository=..., tag='0.3.2', revision_id='338da21eef5f2f1e5e0a8d47c62f5ad0d84b7ff8'), identifier='0.3.2'),
+         Release(revision=Revision(repository=..., tag='0.4', revision_id='0b8173b5bcaebf892a77bc4a294f86a697926b81'), identifier='0.4'),
+         Release(revision=Revision(repository=..., tag='0.5', revision_id='cddfce9435318ab1d6fb8426ae74a55ea672d0d5'), identifier='0.5'),
+         Release(revision=Revision(repository=..., tag='0.6', revision_id='69576994caab3e35698f582cd2cbf5c9efb3e04c'), identifier='0.6'),
+         Release(revision=Revision(repository=..., tag='0.6.1', revision_id='dd173c9ad237b88e44f62450c8f8c4a92b99368d'), identifier='0.6.1'),
+         Release(revision=Revision(repository=..., tag='0.6.2', revision_id='6988f89d7b0024d9849b14d7a44c063e38a882c5'), identifier='0.6.2'),
+         Release(revision=Revision(repository=..., tag='0.6.3', revision_id='0f70e14148985802d5f3e4cb501f0393c0234c14'), identifier='0.6.3'),
+         Release(revision=Revision(repository=..., tag='0.6.4', revision_id='7676c7b9fec46b6c379d45825e980e70f58e8ad8'), identifier='0.6.4'),
+         Release(revision=Revision(repository=..., tag='0.7', revision_id='4fa95eee2e0b6b8b4c646e426a5ba397672ade17'), identifier='0.7')]
+        """
+        available_revisions = getattr(self, self.release_scheme)
+        available_releases = []
+        for identifier, revision in available_revisions.items():
+            match = self.release_filter.match(identifier)
+            if match:
+                # If the regular expression contains a capturing group we
+                # set the release identifier to the captured substring
+                # instead of the complete tag/branch identifier.
+                captures = match.groups()
+                if captures:
+                    identifier = captures[0]
+                available_releases.append(Release(revision=revision, identifier=identifier))
+        return natsort(available_releases, key=operator.attrgetter('identifier'))
+
     def find_branches(self):
         """
         Find information about the branches in the version control repository.
+
+        This is an internal method that is expected to be implemented by
+        subclasses of :py:class:`Repository` and is used by
+        :py:attr:`Repository.branches`.
 
         :returns: A generator of :py:class:`Revision` objects.
         """
@@ -450,6 +558,10 @@ class Repository(object):
     def find_tags(self):
         """
         Find information about the tags in the version control repository.
+
+        This is an internal method that is expected to be implemented by
+        subclasses of :py:class:`Repository` and is used by
+        :py:attr:`Repository.tags`.
 
         :returns: A generator of :py:class:`Revision` objects.
         """
@@ -497,6 +609,7 @@ class Revision(object):
         :param revision_id: A string containing a hexadecimal hash.
         :param revision_number: The revision number (an integer, optional).
         :param branch: The name of the branch (a string, optional).
+        :param tag: The name of the tag (a string, optional).
         """
         self.repository = repository
         self.revision_id = revision_id
@@ -520,6 +633,51 @@ class Revision(object):
             fields.append("revision_number=%r" % self._revision_number)
         fields.append("revision_id=%r" % self.revision_id)
         return "%s(%s)" % (self.__class__.__name__, ', '.join(fields))
+
+class Release(object):
+
+    """
+    Most version control repositories are used to store software projects and
+    most software projects have the concept of "releases": *Specific versions
+    of a software project that have been given a human and machine readable
+    version number (in one form or another).* :py:class:`Release` objects exist
+    to capture this concept in a form that is concrete enough to be generally
+    useful while being abstract enough to be used in various ways (because
+    every software project has its own scheme for releases).
+
+
+    By default the :py:class:`Release` objects created by
+    :py:attr:`Repository.releases` are based on :py:attr:`Repository.tags`, but
+    using the ``release_scheme`` argument to the :py:class:`Repository`
+    constructor you can specify that releases should be based on
+    :py:attr:`Repository.branches` instead. Additionally you can use the
+    ``release_filter`` argument to specify a regular expression that will be
+    used to distinguish valid releases from other tags/branches.
+
+    :ivar revision: The :py:class:`Revision` that the release relates to.
+
+    :ivar identifier: The name of the tag or branch (a string). If a
+          ``release_filter`` containing a single capture group is used this
+          identifier is set to the captured substring instead of the complete
+          tag or branch name.
+    """
+
+    def __init__(self, revision, identifier):
+        """
+        Initialize a release.
+
+        :param revision: The :py:class:`Revision` that the release relates to.
+        :param identifier: The (substring of the) tag or branch name that the
+                           release is based on (a string).
+        """
+        self.revision = revision
+        self.identifier = identifier
+
+    def __repr__(self):
+        return "%s(%s)" % (self.__class__.__name__, ', '.join([
+            "revision=%r" % self.revision,
+            "identifier=%r" % self.identifier,
+        ]))
 
 class HgRepo(Repository):
 

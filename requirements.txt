@@ -1,4 +1,5 @@
 coloredlogs >= 0.5
 executor >= 1.2
 humanfriendly >= 1.8.1
+naturalsort >= 1.3
 six >= 1.8.0

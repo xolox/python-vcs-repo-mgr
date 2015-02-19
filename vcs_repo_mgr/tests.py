@@ -1,7 +1,7 @@
 # Automated tests for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: November 2, 2014
+# Last Change: February 19, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -31,14 +31,15 @@ from vcs_repo_mgr.cli import main
 # Initialize a logger.
 logger = logging.getLogger(__name__)
 
-# We need these in multiple places.
-DIGITS_PATTERN = re.compile('^[0-9]+$')
-HEX_SUM_PATTERN = re.compile('^[A-Fa-f0-9]+$')
-
 # Locations of remote repositories.
 REMOTE_BZR_REPO = 'lp:python-apt'
 REMOTE_GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
 REMOTE_HG_REPO = 'https://bitbucket.org/ianb/virtualenv'
+
+# We need these in multiple places.
+DIGITS_PATTERN = re.compile('^[0-9]+$')
+HEX_SUM_PATTERN = re.compile('^[A-Fa-f0-9]+$')
+VCS_FIELD_PATTERN = re.compile('Vcs-Git: %s#[A-Fa-f0-9]+$' % re.escape(REMOTE_GIT_REPO))
 
 # Global state of the test suite.
 TEMPORARY_DIRECTORIES = []
@@ -85,11 +86,16 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_argument_checking(self):
         """
-        Test that subclasses of :py:class:`Repository` raise an exception on
-        non-existing local directories when no remote location is given.
+        Test that subclasses of :py:class:`Repository` raise an exception on:
+
+        - Non-existing local directories when no remote location is given.
+        - Invalid release schemes.
+        - Invalid release filters.
         """
-        non_existing_repo = os.path.join(tempfile.gettempdir(), '/tmp/non-existing-repo-%i' % random.randint(0, 1000))
-        self.assertRaises(Exception, GitRepo, local=non_existing_repo)
+        non_existing_repo = os.path.join(tempfile.gettempdir(), 'vcs-repo-mgr', 'non-existing-repo-%i' % random.randint(0, 1000))
+        self.assertRaises(ValueError, GitRepo, local=non_existing_repo)
+        self.assertRaises(ValueError, GitRepo, local=non_existing_repo, remote=REMOTE_GIT_REPO, release_scheme='not-tags-and-not-branches')
+        self.assertRaises(ValueError, GitRepo, local=non_existing_repo, remote=REMOTE_GIT_REPO, release_scheme='tags', release_filter='regex with multiple (capture) (groups)')
 
     def test_repository_coercion(self):
         """
@@ -103,6 +109,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test auto vivification of other repositories.
         repository = coerce_repository('hg+%s' % REMOTE_HG_REPO)
         self.assertTrue(isinstance(repository, HgRepo))
+        # Test that type prefix parsing swallows UnknownRepositoryTypeError.
+        self.assertRaises(ValueError, coerce_repository, 'https://github.com/xolox/python-vcs-repo-mgr.git+with-a-plus-in-the-middle')
         # Test that Repository objects pass through untouched.
         self.assertTrue(repository is coerce_repository(repository))
 
@@ -115,6 +123,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
         self.assertTrue(DIGITS_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-number')))
         self.assertTrue(HEX_SUM_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-id')))
+        self.assertTrue(VCS_FIELD_PATTERN.match(call('--repository=test', '--vcs-control-field')))
         self.assertEqual(call('--repository=test', '--find-directory', '--verbose').strip(), repository.local)
         with limit_vcs_updates():
             call('--repository=test', '--update')
@@ -124,7 +133,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(os.path.join(export_directory, 'setup.py'))
         self.assertTrue(os.path.join(export_directory, 'verboselogs.py'))
 
-    def test_a_revision_number_summing(self):
+    def test_revision_number_summing(self):
         """
         Test summing of local revision numbers.
         """
@@ -229,6 +238,15 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
         self.assertTrue(os.path.isdir(os.path.join(export_directory, 'apt')))
 
+    def test_release_objects(self):
+        """
+        Test creation of Release objects.
+        """
+        repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
+        self.assertTrue(len(repository.releases) > 0)
+        for release in repository.releases:
+            self.assertEqual(release.identifier, release.revision.tag)
+
     def create_repo_using_config(self, repository_type, remote_location, second_repository_type=None, second_remote_location=None):
         """
         Instantiate a :py:class:`.Repository` object by creating a temporary
@@ -244,6 +262,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             handle.write('type = %s\n' % repository_type)
             handle.write('local = %s\n' % local_checkout)
             handle.write('remote = %s\n' % remote_location)
+            handle.write('release-scheme = tags\n')
+            handle.write('release-filter = (.+)\n')
             # Create a second valid repository definition?
             if second_repository_type and second_remote_location:
                 handle.write('[second]\n')
