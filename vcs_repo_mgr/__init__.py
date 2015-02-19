@@ -98,12 +98,12 @@ def coerce_repository(value):
     vcs_type, _, remote = value.partition('+')
     if vcs_type and remote:
         try:
-            return repository_factory(vcs_type, local=find_cache_directory(remote), remote=remote)
+            return repository_factory(vcs_type, remote=remote)
         except UnknownRepositoryTypeError:
             pass
     # Check for remote locations that end with the suffix `.git' (fairly common).
     if value.endswith('.git'):
-        return GitRepo(local=find_cache_directory(value), remote=value)
+        return GitRepo(remote=value)
     # If all else fails, at least give a clear explanation of the problem.
     msg = ("The string %r doesn't match the name of any configured repository"
            " and it also can't be parsed as the location of a remote"
@@ -255,9 +255,15 @@ class Repository(object):
         Initialize a version control repository interface.
 
         :param local: The pathname of the directory where the local clone of
-                      the repository is stored (a string). This directory
-                      doesn't have to exist, but in that case ``remote`` must
-                      be given.
+                      the repository is stored (a string). If ``remote`` is not
+                      given this argument is required. If ``remote`` is given:
+
+                      - The ``local`` argument can be omitted. In this case a
+                        temporary directory with a stable location will be
+                        selected using :py:func:`find_cache_directory()`.
+                      - A non-existing local directory can be given, this
+                        directory will be created by cloning the remote
+                        repository.
         :param remote: The URL of the remote repository (a string). If this is
                        not given then the local directory must already exist
                        and contain a supported repository.
@@ -290,10 +296,16 @@ class Repository(object):
         self.remote = remote
         self.release_scheme = release_scheme or 'tags'
         self.release_filter = release_filter or '.*'
+        # Make sure we know how to get access to (a copy of) the repository.
         if not (self.exists or self.remote):
-            # Make sure we know how to get access to (a copy of) the repository.
             msg = "Local repository (%r) doesn't exist and no remote repository specified!"
             raise ValueError(msg % self.local)
+        # If the caller specified a remote repository but no local clone we
+        # assume they don't care about the location of the local clone so we
+        # can make something up (i.e. vcs-repo-mgr will act as an exclusive
+        # proxy to the local clone).
+        if self.remote and not self.local:
+            self.local = find_cache_directory(self.remote)
         # Make sure the release scheme was properly specified.
         known_release_schemes = ('branches', 'tags')
         if self.release_scheme not in known_release_schemes:
