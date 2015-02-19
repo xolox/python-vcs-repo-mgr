@@ -144,7 +144,7 @@ def find_configured_repository(name):
              doesn't match any of the configured repositories.
     :raises: :py:exc:`AmbiguousRepositoryNameError` when the given repository
              name is ambiguous (i.e. it matches multiple repository names).
-    :raises: :py:exp:`UnknownRepositoryTypeError` when a repository definition
+    :raises: :py:exc:`UnknownRepositoryTypeError` when a repository definition
              with an unknown type is encountered.
     """
     parser = configparser.RawConfigParser()
