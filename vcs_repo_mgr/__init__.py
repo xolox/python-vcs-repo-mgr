@@ -285,8 +285,10 @@ class Repository(object):
                                ``.*`` matching any branch or tag name.
         :raises: :py:exc:`exceptions.ValueError` for any of the following:
 
-                 - The local repository doesn't exist and no remote repository
-                   is specified.
+                 - Neither the local repository directory nor the remote
+                   repository location is specified.
+                 - The local repository directory doesn't exist and no remote
+                   repository location is specified.
                  - The given release scheme is not 'tags' or 'branches'.
                  - The release filter regular expression contains more than one
                    capture group (if you need additional groups but without the
@@ -296,16 +298,19 @@ class Repository(object):
         self.remote = remote
         self.release_scheme = release_scheme or 'tags'
         self.release_filter = release_filter or '.*'
-        # Make sure we know how to get access to (a copy of) the repository.
-        if not (self.exists or self.remote):
-            msg = "Local repository (%r) doesn't exist and no remote repository specified!"
-            raise ValueError(msg % self.local)
+        # Make sure the caller specified at least the local *or* remote.
+        if not (self.local or self.remote):
+            raise ValueError("No local and no remote repository specified! (one of the two is required)")
         # If the caller specified a remote repository but no local clone we
         # assume they don't care about the location of the local clone so we
         # can make something up (i.e. vcs-repo-mgr will act as an exclusive
         # proxy to the local clone).
         if self.remote and not self.local:
             self.local = find_cache_directory(self.remote)
+        # Make sure we know how to get access to (a copy of) the repository.
+        if not (self.exists or self.remote):
+            msg = "Local repository (%r) doesn't exist and no remote repository specified!"
+            raise ValueError(msg % self.local)
         # Make sure the release scheme was properly specified.
         known_release_schemes = ('branches', 'tags')
         if self.release_scheme not in known_release_schemes:
