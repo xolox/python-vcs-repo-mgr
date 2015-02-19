@@ -1,7 +1,7 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: September 14, 2014
+# Last Change: February 19, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
@@ -26,7 +26,7 @@ install:
 	test -x "$(VIRTUAL_ENV)/bin/pip-accel" || ($(ACTIVATE) && easy_install pip-accel)
 	$(ACTIVATE) && pip-accel install -r requirements.txt
 	$(ACTIVATE) && pip uninstall -y vcs-repo-mgr || true
-	$(ACTIVATE) && pip install --no-deps .
+	$(ACTIVATE) && pip-accel install -e .
 
 test: install
 	test -x "$(VIRTUAL_ENV)/bin/py.test" || ($(ACTIVATE) && pip-accel install pytest)
