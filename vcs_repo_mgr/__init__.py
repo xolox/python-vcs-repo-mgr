@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.9'
+__version__ = '0.10'
 
 # Standard library modules.
 import functools
@@ -66,6 +66,9 @@ logger = logging.getLogger(__name__)
 
 # Inject our logger into all execute() calls.
 execute = functools.partial(execute, logger=logger)
+
+# Dictionary of previously constructed Repository objects.
+loaded_repositories = {}
 
 def coerce_repository(value):
     """
@@ -103,7 +106,7 @@ def coerce_repository(value):
             pass
     # Check for remote locations that end with the suffix `.git' (fairly common).
     if value.endswith('.git'):
-        return GitRepo(remote=value)
+        return repository_factory('git', remote=value)
     # If all else fails, at least give a clear explanation of the problem.
     msg = ("The string %r doesn't match the name of any configured repository"
            " and it also can't be parsed as the location of a remote"
@@ -174,14 +177,25 @@ def repository_factory(vcs_type, **kw):
     :returns: A :py:class:`Repository` object.
     :raises: :py:exc:`UnknownRepositoryTypeError` when the given type is unknown.
     """
+    # Resolve the VCS type string to a Repository subclass.
+    vcs_type = vcs_type.lower()
     if vcs_type in ('bzr', 'bazaar'):
-        return BzrRepo(**kw)
+        constructor = BzrRepo
     elif vcs_type == 'git':
-        return GitRepo(**kw)
+        constructor = GitRepo
     elif vcs_type in ('hg', 'mercurial'):
-        return HgRepo(**kw)
+        constructor = HgRepo
     else:
         raise UnknownRepositoryTypeError("Unknown VCS repository type! (%r)" % vcs_type)
+    # Generate a cache key that we will use to avoid constructing duplicates.
+    cache_key = tuple('%s=%s' % (k, v) for k, v in sorted(kw.items()))
+    logger.debug("Generated repository cache key: %r", cache_key)
+    if cache_key in loaded_repositories:
+        logger.debug("Repository previously constructed, returning cached instance ..")
+    else:
+        logger.debug("Repository not yet constructed, creating new instance ..")
+        loaded_repositories[cache_key] = constructor(**kw)
+    return loaded_repositories[cache_key]
 
 def find_cache_directory(remote):
     """

@@ -289,6 +289,20 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # be raised.
         self.assertRaises(NoMatchingReleasesError, repository.select_release, '0.0.1')
 
+    def test_factory_deduplication(self):
+        """
+        Test that :py:func:`coerce_repository()` and similar functions don't
+        construct duplicate repository objects but return the previously
+        constructed instance instead.
+        """
+        a = coerce_repository(PIP_ACCEL_REPO)
+        b = coerce_repository(PIP_ACCEL_REPO)
+        c = coerce_repository(OUR_PUBLIC_REPO)
+        self.assertTrue(a is b)
+        # Test our assumption about the `is' operator as well :-).
+        self.assertTrue(a is not c)
+        self.assertTrue(b is not c)
+
     def create_repo_using_config(self, repository_type, remote_location, second_repository_type=None, second_remote_location=None):
         """
         Instantiate a :py:class:`.Repository` object by creating a temporary
