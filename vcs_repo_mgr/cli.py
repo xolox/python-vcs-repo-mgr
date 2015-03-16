@@ -63,6 +63,18 @@ Supported options:
     a revision. This option is used in combination with the --repository and
     --revision options.
 
+  --list-releases
+
+    Print the identifiers of the releases in the repository given with the
+    --repository option. The release identifiers are printed on standard
+    output (one per line), ordered using natural order comparison.
+
+  --select-release=RELEASE_ID
+
+    Print the identifier of the newest release that is not newer than
+    RELEASE_ID in the repository given with the --repository option.
+    The release identifier is printed on standard output.
+
   -s, --sum-revisions
 
     Print the summed revision numbers of multiple repository/revision pairs.
@@ -140,8 +152,9 @@ def main():
     try:
         options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:dnisue:vh', [
             'repository=', 'rev=', 'revision=', 'release=', 'find-directory',
-            'find-revision-number', 'find-revision-id', 'sum-revisions',
-            'vcs-control-field', 'update', 'export=', 'verbose', 'help'
+            'find-revision-number', 'find-revision-id', 'list-releases',
+            'select-release=', 'sum-revisions', 'vcs-control-field', 'update',
+            'export=', 'verbose', 'help'
         ])
         for option, value in options:
             if option in ('-r', '--repository'):
@@ -165,6 +178,14 @@ def main():
             elif option in ('-i', '--find-revision-id'):
                 assert repository, "Please specify a repository first!"
                 actions.append(functools.partial(print_revision_id, repository, revision))
+            elif option == '--list-releases':
+                assert repository, "Please specify a repository first!"
+                actions.append(functools.partial(print_releases, repository))
+            elif option == '--select-release':
+                assert repository, "Please specify a repository first!"
+                release_id = value.strip()
+                assert release_id, "Please specify a nonempty release identifier!"
+                actions.append(functools.partial(print_selected_release, repository, release_id))
             elif option in ('-s', '--sum-revisions'):
                 assert len(arguments) >= 2, "Please specify one or more repository/revision pairs!"
                 actions.append(functools.partial(print_summed_revisions, arguments))
@@ -209,6 +230,12 @@ def print_revision_number(repository, revision):
 
 def print_revision_id(repository, revision):
     print(repository.find_revision_id(revision))
+
+def print_selected_release(repository, release_id):
+    print(repository.select_release(release_id).identifier)
+
+def print_releases(repository):
+    print('\n'.join(release.identifier for release in repository.ordered_releases))
 
 def print_summed_revisions(arguments):
     print(sum_revision_numbers(arguments))
