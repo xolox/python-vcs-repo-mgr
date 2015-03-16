@@ -1,7 +1,7 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: February 19, 2015
+# Last Change: March 16, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
@@ -50,6 +50,6 @@ publish:
 	make clean && python setup.py sdist upload
 
 clean:
-	rm -Rf build dist docs/build *.egg-info
+	rm -Rf build dist docs/build *.egg-info htmlcov
 
 .PHONY: default install test docs publish clean
