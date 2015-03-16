@@ -1,7 +1,7 @@
 # Command line interface for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: November 2, 2014
+# Last Change: March 16, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -35,6 +35,17 @@ Supported options:
     If this option is not provided a default revision is selected: `last:1' for
     Bazaar repositories, `master' for git repositories and `default' (not
     `tip'!) for Mercurial repositories.
+
+  --release=RELEASE_ID
+
+    Select a release to operate on. This option works in the same way as the
+    --revision option. Please refer to the vcs-repo-mgr documentation for
+    details on "releases".
+
+    Although release identifiers are based on branch or tag names they
+    may not correspond literally, this is why the release identifier you
+    specify here is translated to a global revision id before being passed to
+    the VCS system.
 
   -n, --find-revision-number
 
@@ -128,7 +139,7 @@ def main():
     # Parse the command line arguments.
     try:
         options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:dnisue:vh', [
-            'repository=', 'rev=', 'revision=', 'find-directory',
+            'repository=', 'rev=', 'revision=', 'release=', 'find-directory',
             'find-revision-number', 'find-revision-id', 'sum-revisions',
             'vcs-control-field', 'update', 'export=', 'verbose', 'help'
         ])
@@ -140,6 +151,11 @@ def main():
             elif option in ('--rev', '--revision'):
                 revision = value.strip()
                 assert revision, "Please specify a nonempty revision string!"
+            elif option == '--release':
+                assert repository, "Please specify a repository first!"
+                release_id = value.strip()
+                assert release_id in repository.releases, "The given release identifier is invalid!"
+                revision = repository.releases[release_id].revision.revision_id
             elif option in ('-d', '--find-directory'):
                 assert repository, "Please specify a repository first!"
                 actions.append(functools.partial(print_directory, repository))
