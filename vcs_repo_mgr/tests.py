@@ -1,7 +1,7 @@
 # Automated tests for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: February 19, 2015
+# Last Change: March 16, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -25,7 +25,7 @@ from vcs_repo_mgr import (
         AmbiguousRepositoryNameError, coerce_repository,
         find_configured_repository, GitRepo, HgRepo, limit_vcs_updates,
         NoMatchingReleasesError, NoSuchRepositoryError,
-        UnknownRepositoryTypeError
+        UnknownRepositoryTypeError, UPDATE_VARIABLE
 )
 from vcs_repo_mgr.cli import main
 
@@ -96,6 +96,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         - Invalid release filters.
         """
         non_existing_repo = os.path.join(tempfile.gettempdir(), 'vcs-repo-mgr', 'non-existing-repo-%i' % random.randint(0, 1000))
+        self.assertRaises(ValueError, GitRepo)
         self.assertRaises(ValueError, GitRepo, local=non_existing_repo)
         self.assertRaises(ValueError, GitRepo, local=non_existing_repo, remote=REMOTE_GIT_REPO, release_scheme='not-tags-and-not-branches')
         self.assertRaises(ValueError, GitRepo, local=non_existing_repo, remote=REMOTE_GIT_REPO, release_scheme='tags', release_filter='regex with multiple (capture) (groups)')
@@ -121,20 +122,40 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         """
         Test the command line interface.
         """
+        # The usage of --help should work (we can't actually validate the output of course).
         call('--help')
+        # The usage of invalid repository names should raise an error.
         self.assertRaises(SystemExit, call, '--repository=non-existing', '--find-directory')
+        # Create a temporary named repository for the purpose of running the test suite.
         repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
+        # Test the --revision and --find-revision-number option.
         self.assertTrue(DIGITS_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-number')))
+        # Test the --revision and --find-revision-id option.
         self.assertTrue(HEX_SUM_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-id')))
+        # Test the --release option (the literal given on the right hand side was manually verified to correspond to the 0.19 tag.
+        self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--release=0.19', '--find-revision-id').strip(), 'c70d28908e4f43341dcbdccc5a478348bf9b1488')
+        # Test the --vcs-control-field option.
         self.assertTrue(VCS_FIELD_PATTERN.match(call('--repository=test', '--vcs-control-field')))
+        # Test the --find-directory option.
         self.assertEqual(call('--repository=test', '--find-directory', '--verbose').strip(), repository.local)
+        # Test the limiting of repository updates (and the saving/restoring of
+        # the environment variable which makes the update limiting work in
+        # stacked contexts).
+        bogus_update_variable_value = '42'
+        os.environ[UPDATE_VARIABLE] = bogus_update_variable_value
         with limit_vcs_updates():
             call('--repository=test', '--update')
             call('--repository=test', '--update')
+        self.assertEqual(os.environ[UPDATE_VARIABLE], bogus_update_variable_value)
+        # Test the --export option.
         export_directory = os.path.join(create_temporary_directory(), 'non-existing-subdirectory')
         call('--repository=test', '--revision=master', '--export=%s' % export_directory)
         self.assertTrue(os.path.join(export_directory, 'setup.py'))
         self.assertTrue(os.path.join(export_directory, 'verboselogs.py'))
+        # Test the --list-releases option.
+        listing_of_releases = call('--repository=%s' % PIP_ACCEL_REPO, '--list-releases').splitlines()
+        for expected_release_tag in ['0.1', '0.4.2', '0.8.20', '0.19.3']:
+            self.assertTrue(expected_release_tag in listing_of_releases)
 
     def test_revision_number_summing(self):
         """
@@ -276,18 +297,24 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_release_selection(self):
         """
-        Test the selection of appropriate releases.
+        Test the selection of appropriate releases. Uses the command line
+        interface where possible in order to test the "business logic" as well
+        as the command line interface.
         """
-        repository = coerce_repository(PIP_ACCEL_REPO)
         # Exact matches should always be honored (obviously :-).
-        self.assertEqual(repository.select_release('0.2').identifier, '0.2')
+        self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.2').strip(), '0.2')
         # If e.g. a major.minor.PATCH release is not available, the release
         # immediately below that should be selected (in this case: same
         # major.minor but different PATCH level).
-        self.assertEqual(repository.select_release('0.19.5').identifier, '0.19.3')
+        self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.19.5').strip(), '0.19.3')
+        # Instantiate a repository for tests that can't be done through the CLI.
+        repository = coerce_repository(PIP_ACCEL_REPO)
         # If no releases are available a known and documented exception should
         # be raised.
         self.assertRaises(NoMatchingReleasesError, repository.select_release, '0.0.1')
+        # Release objects should support repr().
+        release = repository.select_release('0.2')
+        self.assertTrue(isinstance(repr(release), str))
 
     def test_factory_deduplication(self):
         """
