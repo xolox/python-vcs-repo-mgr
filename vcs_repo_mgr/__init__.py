@@ -143,9 +143,7 @@ def find_configured_repository(name):
        release-filter = .*
 
     Three VCS types are currently supported: ``hg`` (``mercurial`` is also
-    accepted), ``git`` and ``bzr`` (``bazaar`` is also accepted). If an
-    unsupported VCS type is used or no repository can be found matching the
-    given name :py:exc:`exceptions.ValueError` is raised.
+    accepted), ``git`` and ``bzr`` (``bazaar`` is also accepted).
 
     :param name: The name of the repository (a string).
     :returns: A :py:class:`Repository` object.
