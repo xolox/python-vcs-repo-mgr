@@ -13,6 +13,9 @@ should help you get started:
   which implement support for a specific VCS system (:py:class:`BzrRepo`,
   :py:class:`GitRepo` and :py:class:`HgRepo`).
 
+  - :py:class:`Repository` objects construct :py:class:`Revision` and
+    :py:class:`Release` objects so you'll most likely be using these.
+
 - The :py:func:`find_configured_repository()` function constructs instances of
   :py:class:`Repository` subclasses based on configuration files. This is
   useful when you find yourself frequently instantiating the same
@@ -32,7 +35,7 @@ should help you get started:
 """
 
 # Semi-standard module versioning.
-__version__ = '0.13'
+__version__ = '0.14'
 
 # Standard library modules.
 import functools
@@ -51,6 +54,14 @@ from natsort import natsort, natsort_key
 from six import string_types
 from six.moves import configparser
 from six.moves import urllib_parse as urlparse
+
+# Modules included in our package.
+from vcs_repo_mgr.exceptions import (
+    AmbiguousRepositoryNameError,
+    NoMatchingReleasesError,
+    NoSuchRepositoryError,
+    UnknownRepositoryTypeError,
+)
 
 # Known configuration file locations.
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
@@ -76,7 +87,7 @@ def coerce_repository(value):
     :param value: The name or URL of a repository (a string or a
                   :py:class:`Repository` object).
     :returns: A :py:class:`Repository` object.
-    :raises: :py:exc:`exceptions.ValueError` when the given ``value`` is not a
+    :raises: :py:exc:`~exceptions.ValueError` when the given ``value`` is not a
              string or a :py:class:`Repository` object or if the value is a string but
              doesn't match the name of any configured repository and also can't
              be parsed as the location of a remote repository.
@@ -138,12 +149,14 @@ def find_configured_repository(name):
 
     :param name: The name of the repository (a string).
     :returns: A :py:class:`Repository` object.
-    :raises: :py:exc:`NoSuchRepositoryError` when the given repository name
-             doesn't match any of the configured repositories.
-    :raises: :py:exc:`AmbiguousRepositoryNameError` when the given repository
-             name is ambiguous (i.e. it matches multiple repository names).
-    :raises: :py:exc:`UnknownRepositoryTypeError` when a repository definition
-             with an unknown type is encountered.
+    :raises: :py:exc:`~vcs_repo_mgr.exceptions.NoSuchRepositoryError` when the
+             given repository name doesn't match any of the configured
+             repositories.
+    :raises: :py:exc:`~vcs_repo_mgr.exceptions.AmbiguousRepositoryNameError`
+             when the given repository name is ambiguous (i.e. it matches
+             multiple repository names).
+    :raises: :py:exc:`~vcs_repo_mgr.exceptions.UnknownRepositoryTypeError` when
+             a repository definition with an unknown type is encountered.
     """
     parser = configparser.RawConfigParser()
     for config_file in [SYSTEM_CONFIG_FILE, USER_CONFIG_FILE]:
@@ -173,7 +186,8 @@ def repository_factory(vcs_type, **kw):
     :param vcs_type: One of the strings 'bazaar', 'bzr', 'git', 'hg' or 'mercurial'.
     :param kw: The keyword arguments to :py:func:`Repository.__init__()`.
     :returns: A :py:class:`Repository` object.
-    :raises: :py:exc:`UnknownRepositoryTypeError` when the given type is unknown.
+    :raises: :py:exc:`~vcs_repo_mgr.exceptions.UnknownRepositoryTypeError` when
+             the given type is unknown.
     """
     # Resolve the VCS type string to a Repository subclass.
     vcs_type = vcs_type.lower()
@@ -295,7 +309,7 @@ class Repository(object):
                                group (instead of the complete tag or branch
                                name). This defaults to the regular expression
                                ``.*`` matching any branch or tag name.
-        :raises: :py:exc:`exceptions.ValueError` for any of the following:
+        :raises: :py:exc:`~exceptions.ValueError` for any of the following:
 
                  - Neither the local repository directory nor the remote
                    repository location is specified.
@@ -645,8 +659,8 @@ class Repository(object):
                                         the upper bound for the selection (a
                                         string).
         :returns: The identifier of the selected release (a string).
-        :raises: :py:exc:`NoMatchingReleasesError` when no matching releases
-                 are found.
+        :raises: :py:exc:`~vcs_repo_mgr.exceptions.NoMatchingReleasesError`
+                 when no matching releases are found.
         """
         matching_releases = []
         highest_allowed_key = natsort_key(highest_allowed_release)
@@ -1031,29 +1045,5 @@ class BzrRepo(Repository):
                 yield Revision(repository=self,
                                revision_id=tokens[1],
                                tag=tokens[0])
-
-class NoSuchRepositoryError(Exception):
-    """
-    Exception raised by :py:func:`find_configured_repository()` when the given
-    repository name doesn't match any of the configured repositories.
-    """
-
-class AmbiguousRepositoryNameError(Exception):
-    """
-    Exception raised by :py:func:`find_configured_repository()` when the given
-    repository name is ambiguous (i.e. it matches multiple repository names).
-    """
-
-class UnknownRepositoryTypeError(Exception):
-    """
-    Exception raised by :py:func:`find_configured_repository()` when it
-    encounters a repository definition with an unknown type.
-    """
-
-class NoMatchingReleasesError(Exception):
-    """
-    Exception raised by :py:func:`Repository.select_release()` when no matching
-    releases are found in the repository.
-    """
 
 # vim: ts=4 sw=4 et
