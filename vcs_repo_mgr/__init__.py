@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 16, 2015
+# Last Change: May 8, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -34,7 +34,7 @@ From github.com:xolox/python-verboselogs
 """
 
 # Semi-standard module versioning.
-__version__ = '0.12'
+__version__ = '0.13'
 
 # Standard library modules.
 import functools
@@ -637,6 +637,32 @@ class Repository(object):
             msg = "No releases below or equal to %r found in repository!"
             raise NoMatchingReleasesError(msg % highest_allowed_release)
         return matching_releases[-1]
+
+    def release_to_branch(self, release_id):
+        """
+        Shortcut to translate a release identifier to a branch name.
+
+        :param release_id: A :py:attr:`Release.identifier` value (a string).
+        :returns: A branch name (a string).
+        :raises: :py:exc:`~exceptions.TypeError` when the repository is not
+                 using branches as its release scheme.
+        """
+        if self.release_scheme != 'branches':
+            raise TypeError("Repository isn't using 'branches' release scheme!")
+        return self.releases[release_id].revision.branch
+
+    def release_to_tag(self, release_id):
+        """
+        Shortcut to translate a release identifier to a tag name.
+
+        :param release_id: A :py:attr:`Release.identifier` value (a string).
+        :returns: A tag name (a string).
+        :raises: :py:exc:`~exceptions.TypeError` when the repository is not
+                 using tags as its release scheme.
+        """
+        if self.release_scheme != 'tags':
+            raise TypeError("Repository isn't using 'tags' release scheme!")
+        return self.releases[release_id].revision.tag
 
     def find_branches(self):
         """
