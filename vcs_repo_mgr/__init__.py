@@ -373,6 +373,8 @@ class Repository(object):
     def last_updated_file(self):
         """
         The pathname of the file used to mark the last successful update (a string).
+
+        Used internally by the :py:attr:`last_updated` property.
         """
         return os.path.join(self.vcs_directory, 'vcs-repo-mgr.txt')
 
@@ -380,6 +382,9 @@ class Repository(object):
     def last_updated(self):
         """
         Find the date and time when `vcs-repo-mgr` last checked for updates.
+
+        Used internally by the :py:func:`update()` method when used in
+        combination with :py:class:`limit_vcs_updates`.
 
         :returns: The number of seconds since the UNIX epoch (0 for remote
                   repositories that don't have a local clone yet).
@@ -393,6 +398,8 @@ class Repository(object):
     def mark_updated(self):
         """
         Mark a successful repository update so that :py:attr:`last_updated` can report it.
+
+        Used internally by the :py:func:`update()` method.
         """
         with open(self.last_updated_file, 'w') as handle:
             handle.write('%i\n' % time.time())
@@ -418,6 +425,9 @@ class Repository(object):
     def update(self):
         """
         Update the local clone of the remote version control repository.
+
+        If used in combination with :py:class:`limit_vcs_updates` this won't
+        perform redundant updates.
 
         .. note:: Automatically creates the local repository on the first run.
         """
