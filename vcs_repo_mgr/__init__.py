@@ -5,27 +5,25 @@
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
-Here's how it works:
+When using `vcs-repo-mgr` as a Python API the following top level entities
+should help you get started:
 
->>> from vcs_repo_mgr import GitRepo
->>> repo = GitRepo(local='/tmp/verboselogs.git', remote='git@github.com:xolox/python-verboselogs.git')
->>> repo.exists
-False
->>> repo.create()
-Cloning into bare repository '/tmp/verboselogs.git'...
-remote: Reusing existing pack: 7, done.
-remote: Total 7 (delta 0), reused 0 (delta 0)
-Receiving objects: 100% (7/7), done.
->>> repo.exists
-True
->>> repo.update()
-From github.com:xolox/python-verboselogs
- * branch            HEAD       -> FETCH_HEAD
->>> repo.branches
-{'master': Revision(repository=GitRepo(local='/tmp/verboselogs.git',
-                                       remote='git@github.com:xolox/python-verboselogs.git'),
-                    revision_id='f6b89e5',
-                    branch='master')}
+- The :py:class:`Repository` class implements most of the functionality exposed
+  by the `vcs-repo-mgr` project. In practice you'll use one of the subclasses
+  which implement support for a specific VCS system (:py:class:`BzrRepo`,
+  :py:class:`GitRepo` and :py:class:`HgRepo`).
+
+- The :py:func:`find_configured_repository()` function constructs instances of
+  :py:class:`Repository` subclasses based on configuration files. This is
+  useful when you find yourself frequently instantiating the same
+  :py:class:`Repository` instances and you'd rather refer to a repository name
+  in your code than repeating the complete local and remote locations
+  everywhere in your code (this kind of duplication is bad after all :-).
+
+- You can choose to directly instantiate :py:class:`BzrRepo`,
+  :py:class:`GitRepo` and/or :py:class:`HgRepo` instances or you can use one of
+  the helper functions that instantiate repository objects for you
+  (:py:func:`coerce_repository()` and :py:func:`repository_factory()`).
 
 .. note:: This module handles subprocess management using the
           :py:func:`executor.execute()` function which means
@@ -590,9 +588,9 @@ class Repository(object):
 
         .. note:: Automatically creates the local repository on the first run.
 
-        Here's an example based on a mirror of the repository of the git
-        project which shows the last ten releases based on tags, where each
-        release identifier captures a tag without its 'v' prefix:
+        Here's an example based on a mirror of the git project's repository
+        which shows the last ten releases based on tags, where each release
+        identifier captures a tag without its 'v' prefix:
 
         >>> from vcs_repo_mgr import GitRepo
         >>> from pprint import pprint
