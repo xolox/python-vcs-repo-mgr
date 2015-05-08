@@ -486,6 +486,14 @@ class Repository(object):
                          branch (a string). Defaults to the latest revision in
                          the default branch.
         :returns: A tuple with two strings: The name of the field and the value.
+
+        Here's an example based on the public git repository of the
+        vcs-repo-mgr project:
+
+        >>> from vcs_repo_mgr import coerce_repository
+        >>> repository = coerce_repository('https://github.com/xolox/python-vcs-repo-mgr.git')
+        >>> repository.generate_control_field()
+        ('Vcs-Git', 'https://github.com/xolox/python-vcs-repo-mgr.git#b617731b6c0ca746665f597d2f24b8814b137ebc')
         """
         value = "%s#%s" % (self.remote or self.local, self.find_revision_id(revision))
         return self.control_field, value
