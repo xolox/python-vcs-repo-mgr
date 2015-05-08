@@ -243,7 +243,7 @@ License
 
 This software is licensed under the `MIT license`_.
 
-© 2014 Peter Odding.
+© 2015 Peter Odding.
 
 .. External references:
 .. _Bazaar: http://bazaar.canonical.com/en/
