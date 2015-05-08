@@ -710,24 +710,33 @@ class Revision(object):
     :py:class:`Revision` objects represent a specific revision in a
     :py:class:`Repository`. The following fields are available:
 
-    :ivar repository: The :py:class:`Repository` object of the
-          version control repository containing the revision.
+    .. py:attribute:: repository
 
-    :ivar revision_id: A string containing a global revision id (a hexadecimal
-          hash) comparable between local and remote repositories. Useful to
-          unambiguously refer to a revision and its history. This field is
-          always available.
+       The :py:class:`Repository` object of the version control repository
+       containing the revision.
 
-    :ivar revision_number: A local revision number (an incrementing
-          integer). Useful as a build number or when a simple, incrementing
-          version number is required. Should not be used to unambiguously refer
-          to a revision. If not available this will be ``None``.
+    .. py:attribute:: revision_id
 
-    :ivar branch: The name of the branch in which the revision exists (a
-          string). If not available this will be ``None``.
+       A string containing a global revision id (a hexadecimal hash) comparable
+       between local and remote repositories. Useful to unambiguously refer to
+       a revision and its history. This field is always available.
 
-    :ivar tag: The name of the tag associated to the revision (a string). If
-          not available this will be ``None``.
+    .. py:attribute:: revision_number
+
+       A local revision number (an incrementing integer). Useful as a build
+       number or when a simple, incrementing version number is required. Should
+       not be used to unambiguously refer to a revision. If not available this
+       will be ``None``.
+
+    .. py:attribute:: branch
+
+       The name of the branch in which the revision exists (a string). If not
+       available this will be ``None``.
+
+    .. py:attribute:: tag
+
+       The name of the tag associated to the revision (a string). If not
+       available this will be ``None``.
     """
 
     def __init__(self, repository, revision_id, revision_number=None, branch=None, tag=None):
@@ -783,12 +792,15 @@ class Release(object):
     ``release_filter`` argument to specify a regular expression that will be
     used to distinguish valid releases from other tags/branches.
 
-    :ivar revision: The :py:class:`Revision` that the release relates to.
+    .. py:attribute:: revision
 
-    :ivar identifier: The name of the tag or branch (a string). If a
-          ``release_filter`` containing a single capture group is used this
-          identifier is set to the captured substring instead of the complete
-          tag or branch name.
+       The :py:class:`Revision` that the release relates to.
+
+    .. py:attribute:: identifier
+
+      The name of the tag or branch (a string). If a ``release_filter``
+      containing a single capture group is used this identifier is set to the
+      captured substring instead of the complete tag or branch name.
     """
 
     def __init__(self, revision, identifier):
