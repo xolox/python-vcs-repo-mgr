@@ -564,35 +564,24 @@ class Repository(object):
 
         .. note:: Automatically creates the local repository on the first run.
 
-        Here's a simple example based on the public git repository of the
-        vcs-repo-mgr project:
+        Here's an example based on a mirror of the repository of the git
+        project which shows the last ten releases based on tags, where each
+        release identifier captures a tag without its 'v' prefix:
 
-        >>> from vcs_repo_mgr import coerce_repository
+        >>> from vcs_repo_mgr import GitRepo
         >>> from pprint import pprint
-        >>> repository = coerce_repository('https://github.com/xolox/python-vcs-repo-mgr.git')
-        >>> pprint(repository.releases)
-        {'0.1':   Release(revision=Revision(...), identifier='0.1'  ),
-         '0.1.1': Release(revision=Revision(...), identifier='0.1.1'),
-         '0.1.2': Release(revision=Revision(...), identifier='0.1.2'),
-         '0.1.3': Release(revision=Revision(...), identifier='0.1.3'),
-         '0.1.4': Release(revision=Revision(...), identifier='0.1.4'),
-         '0.1.5': Release(revision=Revision(...), identifier='0.1.5'),
-         '0.2':   Release(revision=Revision(...), identifier='0.2'  ),
-         '0.2.1': Release(revision=Revision(...), identifier='0.2.1'),
-         '0.2.2': Release(revision=Revision(...), identifier='0.2.2'),
-         '0.2.3': Release(revision=Revision(...), identifier='0.2.3'),
-         '0.2.4': Release(revision=Revision(...), identifier='0.2.4'),
-         '0.3':   Release(revision=Revision(...), identifier='0.3'  ),
-         '0.3.1': Release(revision=Revision(...), identifier='0.3.1'),
-         '0.3.2': Release(revision=Revision(...), identifier='0.3.2'),
-         '0.4':   Release(revision=Revision(...), identifier='0.4'  ),
-         '0.5':   Release(revision=Revision(...), identifier='0.5'  ),
-         '0.6':   Release(revision=Revision(...), identifier='0.6'  ),
-         '0.6.1': Release(revision=Revision(...), identifier='0.6.1'),
-         '0.6.2': Release(revision=Revision(...), identifier='0.6.2'),
-         '0.6.3': Release(revision=Revision(...), identifier='0.6.3'),
-         '0.6.4': Release(revision=Revision(...), identifier='0.6.4'),
-         '0.7':   Release(revision=Revision(...), identifier='0.7'  )}
+        >>> repository = GitRepo(remote='https://github.com/git/git.git', release_scheme='tags', release_filter=r'^v(\d+(?:\.\d+)*)$')
+        >>> pprint(repository.ordered_releases[-10:])
+        [Release(revision=Revision(..., tag='v2.2.2', ...), identifier='2.2.2'),
+         Release(revision=Revision(..., tag='v2.3.0', ...), identifier='2.3.0'),
+         Release(revision=Revision(..., tag='v2.3.1', ...), identifier='2.3.1'),
+         Release(revision=Revision(..., tag='v2.3.2', ...), identifier='2.3.2'),
+         Release(revision=Revision(..., tag='v2.3.3', ...), identifier='2.3.3'),
+         Release(revision=Revision(..., tag='v2.3.4', ...), identifier='2.3.4'),
+         Release(revision=Revision(..., tag='v2.3.5', ...), identifier='2.3.5'),
+         Release(revision=Revision(..., tag='v2.3.6', ...), identifier='2.3.6'),
+         Release(revision=Revision(..., tag='v2.3.7', ...), identifier='2.3.7'),
+         Release(revision=Revision(..., tag='v2.4.0', ...), identifier='2.4.0')]
         """
         available_releases = {}
         available_revisions = getattr(self, self.release_scheme)
