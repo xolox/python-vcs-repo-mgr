@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: May 8, 2015
+# Last Change: June 25, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -35,7 +35,7 @@ should help you get started:
 """
 
 # Semi-standard module versioning.
-__version__ = '0.14'
+__version__ = '0.15'
 
 # Standard library modules.
 import functools
@@ -49,7 +49,7 @@ import time
 
 # External dependencies.
 from executor import execute
-from humanfriendly import concatenate, format_path
+from humanfriendly import concatenate, format_path, parse_path
 from natsort import natsort, natsort_key
 from six import string_types
 from six.moves import configparser
@@ -137,7 +137,7 @@ def find_configured_repository(name):
 
        [vcs-repo-mgr]
        type = git
-       local = /home/peter/projects/vcs-repo-mgr
+       local = ~/projects/vcs-repo-mgr
        remote = git@github.com:xolox/python-vcs-repo-mgr.git
        release-scheme = tags
        release-filter = .*
@@ -171,8 +171,12 @@ def find_configured_repository(name):
     else:
         options = dict(parser.items(matching_repos[0]))
         vcs_type = options.get('type', '').lower()
+        local_path = options.get('local')
+        if local_path:
+            # Expand a leading tilde and/or environment variables.
+            local_path = parse_path(local_path)
         return repository_factory(vcs_type,
-                                  local=options.get('local'),
+                                  local=local_path,
                                   remote=options.get('remote'),
                                   release_scheme=options.get('release-scheme'),
                                   release_filter=options.get('release-filter'))
