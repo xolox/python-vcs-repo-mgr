@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: June 25, 2015
+# Last Change: August 19, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -35,7 +35,7 @@ should help you get started:
 """
 
 # Semi-standard module versioning.
-__version__ = '0.15'
+__version__ = '0.15.1'
 
 # Standard library modules.
 import functools
@@ -930,7 +930,7 @@ class GitRepo(Repository):
     default_revision = 'master'
     control_field = 'Vcs-Git'
     create_command = 'git clone --bare {remote} {local}'
-    update_command = 'cd {local} && git fetch {remote}'
+    update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
 
     @property
