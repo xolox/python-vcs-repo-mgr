@@ -225,32 +225,40 @@ def main():
 
 
 def print_directory(repository):
+    """Report the local directory of a repository to standard output."""
     print(repository.local)
 
 
 def print_revision_number(repository, revision):
+    """Report the revision number of the given revision to standard output."""
     print(repository.find_revision_number(revision))
 
 
 def print_revision_id(repository, revision):
+    """Report the revision id of the given revision to standard output."""
     print(repository.find_revision_id(revision))
 
 
 def print_selected_release(repository, release_id):
+    """Report the identifier of the given release to standard output."""
     print(repository.select_release(release_id).identifier)
 
 
 def print_releases(repository):
+    """Report the identifiers of all known releases of the given repository to standard output."""
     print('\n'.join(release.identifier for release in repository.ordered_releases))
 
 
 def print_summed_revisions(arguments):
+    """Report the summed revision numbers for the given arguments to standard output."""
     print(sum_revision_numbers(arguments))
 
 
 def print_vcs_control_field(repository, revision):
+    """Report the VCS control field for the given repository and revision to standard output."""
     print("%s: %s" % repository.generate_control_field(revision))
 
 
 def usage():
+    """Report the usage message to standard output."""
     print(__doc__.strip())

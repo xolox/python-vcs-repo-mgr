@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Setup script for the `vcs-repo-mgr' package.
+"""Setup script for the `vcs-repo-mgr' package."""
 #
 # Author: Peter Odding <peter@peterodding.com>
 # Last Change: September 14, 2014

@@ -5,6 +5,8 @@
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
+Python API for the `vcs-repo-mgr` package.
+
 When using `vcs-repo-mgr` as a Python API the following top level entities
 should help you get started:
 
@@ -82,8 +84,7 @@ loaded_repositories = {}
 
 def coerce_repository(value):
     """
-    Convert a string (taken to be a repository name or URL) to a
-    :py:class:`Repository` object.
+    Convert a string (taken to be a repository name or URL) to a :py:class:`Repository` object.
 
     :param value: The name or URL of a repository (a string or a
                   :py:class:`Repository` object).
@@ -126,8 +127,9 @@ def coerce_repository(value):
 
 def find_configured_repository(name):
     """
-    Find a version control repository defined by the user in one of the
-    following configuration files:
+    Find a version control repository defined by the user in a configuration file.
+
+    The following configuration files are supported:
 
     1. ``/etc/vcs-repo-mgr.ini``
     2. ``~/.vcs-repo-mgr.ini``
@@ -227,9 +229,10 @@ def find_cache_directory(remote):
 
 def normalize_name(name):
     """
-    Normalize a repository name so that minor variations in character case
-    and/or punctuation don't disrupt the name matching in
-    :py:func:`find_configured_repository()`.
+    Normalize a repository name.
+
+    This makes sure that minor variations in character case and/or punctuation
+    don't disrupt the name matching in :func:`find_configured_repository()`.
 
     :param name: The name of a repository (a string).
     :returns: The normalized repository name (a string).
@@ -239,15 +242,16 @@ def normalize_name(name):
 
 def sum_revision_numbers(arguments):
     """
-    Sum revision numbers of multiple repository/revision pairs. This is useful
-    when you're building a package based on revisions from multiple VCS
-    repositories. By taking changes in all repositories into account when
-    generating version numbers you can make sure that your version number is
-    bumped with every single change.
+    Sum revision numbers of multiple repository/revision pairs.
 
     :param arguments: A list of strings with repository names and revision
                       strings.
     :returns: A single integer containing the summed revision numbers.
+
+    This is useful when you're building a package based on revisions from
+    multiple VCS repositories. By taking changes in all repositories into
+    account when generating version numbers you can make sure that your version
+    number is bumped with every single change.
     """
     if len(arguments) % 2 != 0:
         raise ValueError("Please provide an even number of arguments! (one or more repository/revision pairs)")
@@ -269,10 +273,12 @@ class limit_vcs_updates(object):
     """
 
     def __enter__(self):
+        """Set :data:`UPDATE_VARIABLE` to the current time when entering the context."""
         self.old_value = os.environ.get(UPDATE_VARIABLE)
         os.environ[UPDATE_VARIABLE] = '%i' % time.time()
 
     def __exit__(self, exc_type=None, exc_value=None, traceback=None):
+        """Restore the previous value of :data:`UPDATE_VARIABLE` when leaving the context."""
         if self.old_value is not None:
             os.environ[UPDATE_VARIABLE] = self.old_value
         elif UPDATE_VARIABLE in os.environ:
@@ -282,8 +288,10 @@ class limit_vcs_updates(object):
 class Repository(object):
 
     """
-    Base class for version control repository interfaces. Don't use this
-    directly, use :py:class:`HgRepo` and/or :py:class:`GitRepo` instead.
+    Base class for version control repository interfaces.
+
+    Please don't use this directly, use subclasses like :class:`HgRepo` and/or
+    :class:`GitRepo` instead.
     """
 
     def __init__(self, local=None, remote=None, release_scheme=None, release_filter=None):
@@ -420,11 +428,12 @@ class Repository(object):
 
     def create(self):
         """
-        Create the local clone of the remote version control repository, if it
-        doesn't already exist.
+        Create the local clone of the remote version control repository.
 
         :returns: ``True`` if the repository was just created, ``False`` if it
                   already existed.
+
+        It's not an error if the repository already exists.
         """
         if self.exists:
             return False
@@ -464,8 +473,7 @@ class Repository(object):
 
     def export(self, directory, revision=None):
         """
-        Export the complete tree (at the specified revision) from the local
-        version control repository.
+        Export the complete tree from the local version control repository.
 
         :param directory: The directory where the tree should be exported (a
                           string).
@@ -511,18 +519,17 @@ class Repository(object):
 
     def generate_control_field(self, revision=None):
         """
-        Generate a Debian control file name/value pair for the given repository
-        and revision. This generates a ``Vcs-Bzr`` field for Bazaar_
-        repositories, a ``Vcs-Hg`` field for Mercurial_ repositories and a
-        ``Vcs-Git`` field for Git_ repositories.
+        Generate a Debian control file name/value pair for the given repository and revision.
 
         :param revision: A reference to a revision, most likely the name of a
                          branch (a string). Defaults to the latest revision in
                          the default branch.
         :returns: A tuple with two strings: The name of the field and the value.
 
-        Here's an example based on the public git repository of the
-        vcs-repo-mgr project:
+        This generates a ``Vcs-Bzr`` field for Bazaar_ repositories, a
+        ``Vcs-Hg`` field for Mercurial_ repositories and a ``Vcs-Git`` field
+        for Git_ repositories. Here's an example based on the public git
+        repository of the vcs-repo-mgr project:
 
         >>> from vcs_repo_mgr import coerce_repository
         >>> repository = coerce_repository('https://github.com/xolox/python-vcs-repo-mgr.git')
@@ -628,7 +635,7 @@ class Repository(object):
 
     @property
     def releases(self):
-        """
+        r"""
         Find information about the releases in the version control repository.
 
         :returns: A :py:class:`dict` with release identifiers (strings) as keys
@@ -760,6 +767,7 @@ class Repository(object):
         raise NotImplementedError()
 
     def __repr__(self):
+        """Generate a human readable representation of a repository object."""
         fields = []
         if self.local:
             fields.append("local=%r" % self.local)
@@ -771,8 +779,9 @@ class Repository(object):
 class Revision(object):
 
     """
-    :py:class:`Revision` objects represent a specific revision in a
-    :py:class:`Repository`. The following fields are available:
+    :class:`Revision` objects represent a specific revision in a :class:`Repository`.
+
+    The following fields are available:
 
     .. py:attribute:: repository
 
@@ -821,11 +830,13 @@ class Revision(object):
 
     @property
     def revision_number(self):
+        """The revision number of the revision (an integer)."""
         if self._revision_number is None:
             self._revision_number = self.repository.find_revision_number(self.revision_id)
         return self._revision_number
 
     def __repr__(self):
+        """Generate a human readable representation of a revision object."""
         fields = ["repository=%r" % self.repository]
         if self.branch:
             fields.append("branch=%r" % self.branch)
@@ -840,6 +851,8 @@ class Revision(object):
 class Release(object):
 
     """
+    Release objects are revisions that specify a software "release".
+
     Most version control repositories are used to store software projects and
     most software projects have the concept of "releases": *Specific versions
     of a software project that have been given a human and machine readable
@@ -847,7 +860,6 @@ class Release(object):
     to capture this concept in a form that is concrete enough to be generally
     useful while being abstract enough to be used in various ways (because
     every software project has its own scheme for releases).
-
 
     By default the :py:class:`Release` objects created by
     :py:attr:`Repository.releases` are based on :py:attr:`Repository.tags`, but
@@ -880,6 +892,7 @@ class Release(object):
         self.identifier = identifier
 
     def __repr__(self):
+        """Generate a human readable representation of a release object."""
         return "%s(%s)" % (self.__class__.__name__, ', '.join([
             "revision=%r" % self.revision,
             "identifier=%r" % self.identifier,
@@ -903,13 +916,21 @@ class HgRepo(Repository):
 
     @property
     def vcs_directory(self):
+        """The pathname of the ``.hg`` directory (a string)."""
         return os.path.join(self.local, '.hg')
 
     @property
     def exists(self):
+        """:data:`True` if the repository already exists, :data:`False` otherwise."""
         return os.path.isdir(self.vcs_directory)
 
     def find_revision_number(self, revision=None):
+        """
+        Find the revision number of the given revision expression.
+
+        :param revision: A Mercurial specific revision expression (a string).
+        :returns: The revision number (an integer).
+        """
         self.create()
         revision = revision or self.default_revision
         result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--num',
@@ -919,6 +940,12 @@ class HgRepo(Repository):
         return int(result)
 
     def find_revision_id(self, revision=None):
+        """
+        Find the revision id of the given revision expression.
+
+        :param revision: A Mercurial specific revision expression (a string).
+        :returns: The revision id (a hexadecimal string).
+        """
         self.create()
         revision = revision or self.default_revision
         result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--debug', '--id',
@@ -928,6 +955,13 @@ class HgRepo(Repository):
         return result
 
     def find_branches(self):
+        """
+        Find the branches in the Mercurial repository.
+
+        :returns: A generator of :class:`Revision` objects.
+
+        .. note:: Closed branches are not included.
+        """
         listing = execute('hg', '--repository', self.local, 'branches', capture=True)
         for line in listing.splitlines():
             tokens = line.split()
@@ -939,6 +973,11 @@ class HgRepo(Repository):
                                branch=tokens[0])
 
     def find_tags(self):
+        """
+        Find the tags in the Mercurial repository.
+
+        :returns: A generator of :class:`Revision` objects.
+        """
         listing = execute('hg', '--repository', self.local, 'tags', capture=True)
         for line in listing.splitlines():
             tokens = line.split()
@@ -967,14 +1006,30 @@ class GitRepo(Repository):
 
     @property
     def vcs_directory(self):
+        """
+        The pathname of the ``.git`` directory (a string).
+
+        .. note:: If a ``.git`` directory is not found then the base directory
+                  of the repository is returned in the assumption that we're
+                  dealing with a bare repository clone (because bare repository
+                  clones don't contain a ``.git`` directory, unlike Mercurial
+                  repositories without a working copy).
+        """
         directory = os.path.join(self.local, '.git')
         return directory if os.path.isdir(directory) else self.local
 
     @property
     def exists(self):
+        """:data:`True` if the repository already exists, :data:`False` otherwise."""
         return os.path.isfile(os.path.join(self.vcs_directory, 'config'))
 
     def find_revision_number(self, revision=None):
+        """
+        Find the revision number of the given revision expression.
+
+        :param revision: A git specific revision expression (a string).
+        :returns: The revision number (an integer).
+        """
         self.create()
         revision = revision or self.default_revision
         result = execute('git', 'rev-list', revision, '--count', capture=True, directory=self.local)
@@ -983,6 +1038,12 @@ class GitRepo(Repository):
         return int(result)
 
     def find_revision_id(self, revision=None):
+        """
+        Find the revision id of the given revision expression.
+
+        :param revision: A git specific revision expression (a string).
+        :returns: The revision id (a hexadecimal string).
+        """
         self.create()
         revision = revision or self.default_revision
         result = execute('git', 'rev-parse', revision, capture=True, directory=self.local)
@@ -991,6 +1052,11 @@ class GitRepo(Repository):
         return result
 
     def find_branches(self):
+        """
+        Find the branches in the git repository.
+
+        :returns: A generator of :class:`Revision` objects.
+        """
         listing = execute('git', 'branch', '--list', '--verbose', capture=True, directory=self.local)
         for line in listing.splitlines():
             line = line.lstrip('*').strip()
@@ -1002,6 +1068,11 @@ class GitRepo(Repository):
                                    branch=tokens[0])
 
     def find_tags(self):
+        """
+        Find the tags in the git repository.
+
+        :returns: A generator of :class:`Revision` objects.
+        """
         listing = execute('git', 'show-ref', '--tags', capture=True, directory=self.local)
         for line in listing.splitlines():
             tokens = line.split()
@@ -1028,31 +1099,40 @@ class BzrRepo(Repository):
 
     @property
     def vcs_directory(self):
+        """The pathname of the ``.bzr`` directory (a string)."""
         return os.path.join(self.local, '.bzr')
 
     @property
     def exists(self):
+        """:data:`True` if the repository already exists, :data:`False` otherwise."""
         return os.path.isfile(os.path.join(self.vcs_directory, 'branch-format'))
 
     def find_revision_number(self, revision=None):
-        # Bazaar has the concept of dotted revision numbers:
-        #
-        #   For revisions which have been merged into a branch, a dotted
-        #   notation is used (e.g., 3112.1.5). Dotted revision numbers have
-        #   three numbers. The first number indicates what mainline revision
-        #   change is derived from. The second number is the branch counter.
-        #   There can be many branches derived from the same revision, so they
-        #   all get a unique number. The third number is the number of
-        #   revisions since the branch started. For example, 3112.1.5 is the
-        #   first branch from revision 3112, the fifth revision on that
-        #   branch.
-        #
-        #   (From http://doc.bazaar.canonical.com/bzr.2.6/en/user-guide/zen.html#understanding-revision-numbers)
-        #
-        # However we really just want to give a bare integer to our callers. It
-        # doesn't have to be globally accurate, but it should increase as new
-        # commits are made. Below is the equivalent of the git implementation
-        # for Bazaar.
+        """
+        Find the revision number of the given revision expression.
+
+        :param revision: A Bazaar specific revision expression (a string).
+        :returns: The revision number (an integer).
+
+        .. note:: Bazaar has the concept of dotted revision numbers:
+
+                   For revisions which have been merged into a branch, a dotted
+                   notation is used (e.g., 3112.1.5). Dotted revision numbers
+                   have three numbers. The first number indicates what mainline
+                   revision change is derived from. The second number is the
+                   branch counter. There can be many branches derived from the
+                   same revision, so they all get a unique number. The third
+                   number is the number of revisions since the branch started.
+                   For example, 3112.1.5 is the first branch from revision
+                   3112, the fifth revision on that branch.
+
+                   (From http://doc.bazaar.canonical.com/bzr.2.6/en/user-guide/zen.html#understanding-revision-numbers)
+
+                  However we really just want to give a bare integer to our
+                  callers. It doesn't have to be globally accurate, but it
+                  should increase as new commits are made. Below is the
+                  equivalent of the git implementation for Bazaar.
+        """
         self.create()
         revision = revision or self.default_revision
         result = execute('bzr', 'log', '--revision=..%s' % revision, '--line', capture=True, directory=self.local)
@@ -1061,6 +1141,12 @@ class BzrRepo(Repository):
         return revision_number
 
     def find_revision_id(self, revision=None):
+        """
+        Find the revision id of the given revision expression.
+
+        :param revision: A Bazaar specific revision expression (a string).
+        :returns: The revision id (a hexadecimal string).
+        """
         self.create()
         revision = revision or self.default_revision
         result = execute('bzr', 'version-info', '--revision=%s' % revision, '--custom', '--template={revision_id}',
@@ -1070,15 +1156,28 @@ class BzrRepo(Repository):
         return result
 
     def find_branches(self):
+        """
+        Bazaar repository support doesn't support branches.
+
+        This method logs a warning message and returns an empty list. Consider
+        using tags instead.
+        """
         logger.warning("Bazaar repository support doesn't include branches (consider using tags instead).")
         return []
 
     def find_tags(self):
-        # The `bzr tags' command reports tags pointing to non-existing
-        # revisions as `?' but doesn't provide revision ids. We can get the
-        # revision ids using the `bzr tags --show-ids' command but this command
-        # doesn't mark tags pointing to non-existing revisions. We combine
-        # the output of both because we want all the information.
+        """
+        Find the tags in the Bazaar repository.
+
+        :returns: A generator of :class:`Revision` objects.
+
+        .. note:: The ``bzr tags`` command reports tags pointing to
+                  non-existing revisions as ``?`` but doesn't provide revision
+                  ids. We can get the revision ids using the ``bzr tags
+                  --show-ids`` command but this command doesn't mark tags
+                  pointing to non-existing revisions. We combine the output of
+                  both because we want all the information.
+        """
         valid_tags = []
         listing = execute('bzr', 'tags', capture=True, directory=self.local)
         for line in listing.splitlines():

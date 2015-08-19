@@ -1,5 +1,5 @@
-# Automated tests for the `vcs-repo-mgr' package.
-#
+"""Automated tests for the `vcs-repo-mgr` package."""
+
 # Author: Peter Odding <peter@peterodding.com>
 # Last Change: August 19, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
@@ -57,8 +57,9 @@ LOCAL_CHECKOUTS = {}
 
 def create_temporary_directory():
     """
-    Create a temporary directory that will be cleaned up when the test suite is
-    torn down.
+    Create a temporary directory.
+
+    The directory will be cleaned up when the test suite is torn down.
     """
     temporary_directory = tempfile.mkdtemp()
     TEMPORARY_DIRECTORIES.append(temporary_directory)
@@ -86,6 +87,8 @@ def tearDownModule():
 
 
 class VcsRepoMgrTestCase(unittest.TestCase):
+
+    """Container for the `vcs-repo-mgr` test suite."""
 
     def __init__(self, *args, **kw):
         """
@@ -192,7 +195,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_hg_repo(self):
         """
-        Tests for Mercurial repository support.
+        Test Mercurial repository support.
         """
         # Instantiate a HgRepo object using a configuration file.
         repository = self.create_repo_using_config('hg', REMOTE_HG_REPO)
@@ -225,7 +228,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_git_repo(self):
         """
-        Tests for git repository support.
+        Test git repository support.
         """
         # Instantiate a GitRepo object using a configuration file.
         repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
@@ -256,7 +259,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_bzr_repo(self):
         """
-        Tests for Bazaar repository support.
+        Test Bazaar repository support.
         """
         # Instantiate a BzrRepo object using a configuration file.
         repository = self.create_repo_using_config('bzr', REMOTE_BZR_REPO)
@@ -324,9 +327,10 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_release_selection(self):
         """
-        Test the selection of appropriate releases. Uses the command line
-        interface where possible in order to test the "business logic" as well
-        as the command line interface.
+        Test the selection of appropriate releases.
+
+        Uses the command line interface where possible in order to test the
+        "business logic" as well as the command line interface.
         """
         # Exact matches should always be honored (obviously :-).
         self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.2').strip(), '0.2')
@@ -345,9 +349,11 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_factory_deduplication(self):
         """
-        Test that :py:func:`coerce_repository()` and similar functions don't
-        construct duplicate repository objects but return the previously
-        constructed instance instead.
+        Test caching of previously loaded repository objects.
+
+        This method tests that :py:func:`coerce_repository()` and similar
+        functions don't construct duplicate repository objects but return the
+        previously constructed instance instead.
         """
         a = coerce_repository(PIP_ACCEL_REPO)
         b = coerce_repository(PIP_ACCEL_REPO)
@@ -361,7 +367,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                                  second_repository_type=None,
                                  second_remote_location=None):
         """
-        Instantiate a :py:class:`.Repository` object by creating a temporary
+        Test configuration file loading.
+
+        Instantiates a :py:class:`.Repository` object by creating a temporary
         configuration file, thereby testing both configuration file handling
         and repository instantiation.
         """
@@ -413,7 +421,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def validate_all_revisions(self, mapping, **kw):
         """
-        Perform some generic sanity checks on a dictionary with
+        Validate the given dictionary of revisions.
+
+        Performs some generic sanity checks on a dictionary with
         :py:class:`Revision` values. Randomly picks some revisions to sanity
         check (calculating the local revision number of a revision requires the
         execution of an external command and there's really no point in doing
@@ -426,6 +436,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
 
 def call(*arguments):
+    """Helper to call the command line interface from the current Python process."""
     saved_stdout = sys.stdout
     saved_argv = sys.argv
     try:
