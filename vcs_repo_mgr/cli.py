@@ -1,7 +1,7 @@
 # Command line interface for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 16, 2015
+# Last Change: August 19, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -138,6 +138,7 @@ logger = logging.getLogger(__name__)
 # Inject our logger into all execute() calls.
 execute = functools.partial(execute, logger=logger)
 
+
 def main():
     """
     The command line interface of the ``vcs-tool`` command.
@@ -222,28 +223,34 @@ def main():
         logger.exception("Failed to execute requested action(s)!")
         sys.exit(1)
 
+
 def print_directory(repository):
     print(repository.local)
+
 
 def print_revision_number(repository, revision):
     print(repository.find_revision_number(revision))
 
+
 def print_revision_id(repository, revision):
     print(repository.find_revision_id(revision))
+
 
 def print_selected_release(repository, release_id):
     print(repository.select_release(release_id).identifier)
 
+
 def print_releases(repository):
     print('\n'.join(release.identifier for release in repository.ordered_releases))
+
 
 def print_summed_revisions(arguments):
     print(sum_revision_numbers(arguments))
 
+
 def print_vcs_control_field(repository, revision):
     print("%s: %s" % repository.generate_control_field(revision))
 
+
 def usage():
     print(__doc__.strip())
-
-# vim: ts=4 sw=4 et

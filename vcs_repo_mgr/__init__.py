@@ -49,7 +49,7 @@ import time
 
 # External dependencies.
 from executor import execute
-from humanfriendly import concatenate, format_path, parse_path
+from humanfriendly import compact, concatenate, format_path, parse_path
 from natsort import natsort, natsort_key
 from six import string_types
 from six.moves import configparser
@@ -78,6 +78,7 @@ execute = functools.partial(execute, logger=logger)
 
 # Dictionary of previously constructed Repository objects.
 loaded_repositories = {}
+
 
 def coerce_repository(value):
     """
@@ -121,6 +122,7 @@ def coerce_repository(value):
            " and it also can't be parsed as the location of a remote"
            " repository! (maybe you forgot to prefix the type?)")
     raise ValueError(msg % value)
+
 
 def find_configured_repository(name):
     """
@@ -181,6 +183,7 @@ def find_configured_repository(name):
                                   release_scheme=options.get('release-scheme'),
                                   release_filter=options.get('release-filter'))
 
+
 def repository_factory(vcs_type, **kw):
     """
     Instantiate a :py:class:`Repository` object based on the given type and arguments.
@@ -211,6 +214,7 @@ def repository_factory(vcs_type, **kw):
         loaded_repositories[cache_key] = constructor(**kw)
     return loaded_repositories[cache_key]
 
+
 def find_cache_directory(remote):
     """
     Find the directory where temporary local checkouts are to be stored.
@@ -219,6 +223,7 @@ def find_cache_directory(remote):
     """
     return os.path.join('/var/cache/vcs-repo-mgr' if os.access('/var/cache', os.W_OK) else tempfile.gettempdir(),
                         urlparse.quote(remote, safe=''))
+
 
 def normalize_name(name):
     """
@@ -230,6 +235,7 @@ def normalize_name(name):
     :returns: The normalized repository name (a string).
     """
     return re.sub('[^a-z0-9]', '', name.lower())
+
 
 def sum_revision_numbers(arguments):
     """
@@ -251,6 +257,7 @@ def sum_revision_numbers(arguments):
         summed_revision_number += repository.find_revision_number(arguments.pop(0))
     return summed_revision_number
 
+
 class limit_vcs_updates(object):
 
     """
@@ -270,6 +277,7 @@ class limit_vcs_updates(object):
             os.environ[UPDATE_VARIABLE] = self.old_value
         elif UPDATE_VARIABLE in os.environ:
             del os.environ[UPDATE_VARIABLE]
+
 
 class Repository(object):
 
@@ -352,8 +360,10 @@ class Repository(object):
         # At this point we should be dealing with a regular expression object:
         # Make sure the regular expression has zero or one capture group.
         if self.release_filter.groups > 1:
-            msg = "Release filter regular expression pattern is expected to have zero or one capture group, but it has %i instead!"
-            raise ValueError(msg % self.release_filter.groups)
+            raise ValueError(compact("""
+                Release filter regular expression pattern is expected to have
+                zero or one capture group, but it has {count} instead!
+            """, count=self.release_filter.groups))
 
     @property
     def vcs_directory(self):
@@ -578,13 +588,25 @@ class Repository(object):
         >>> from pprint import pprint
         >>> repository = GitRepo(remote='https://github.com/git/git.git')
         >>> pprint(repository.tags)
-        {'v0.99': Revision(repository=GitRepo(...), tag='v0.99', revision_id='d6602ec5194c87b0fc87103ca4d67251c76f233a'),
-         'v0.99.1': Revision(repository=GitRepo(...), tag='v0.99.1', revision_id='f25a265a342aed6041ab0cc484224d9ca54b6f41'),
-         'v0.99.2': Revision(repository=GitRepo(...), tag='v0.99.2', revision_id='c5db5456ae3b0873fc659c19fafdde22313cc441'),
+        {'v0.99': Revision(repository=GitRepo(...),
+                           tag='v0.99',
+                           revision_id='d6602ec5194c87b0fc87103ca4d67251c76f233a'),
+         'v0.99.1': Revision(repository=GitRepo(...),
+                             tag='v0.99.1',
+                             revision_id='f25a265a342aed6041ab0cc484224d9ca54b6f41'),
+         'v0.99.2': Revision(repository=GitRepo(...),
+                             tag='v0.99.2',
+                             revision_id='c5db5456ae3b0873fc659c19fafdde22313cc441'),
          ..., # dozens of tags omitted to keep this example short
-         'v2.3.6': Revision(repository=GitRepo(...), tag='v2.3.6', revision_id='8e7304597727126cdc52771a9091d7075a70cc31'),
-         'v2.3.7': Revision(repository=GitRepo(...), tag='v2.3.7', revision_id='b17db4d9c966de30f5445632411c932150e2ad2f'),
-         'v2.4.0': Revision(repository=GitRepo(...), tag='v2.4.0', revision_id='67308bd628c6235dbc1bad60c9ad1f2d27d576cc')}
+         'v2.3.6': Revision(repository=GitRepo(...),
+                            tag='v2.3.6',
+                            revision_id='8e7304597727126cdc52771a9091d7075a70cc31'),
+         'v2.3.7': Revision(repository=GitRepo(...),
+                            tag='v2.3.7',
+                            revision_id='b17db4d9c966de30f5445632411c932150e2ad2f'),
+         'v2.4.0': Revision(repository=GitRepo(...),
+                            tag='v2.4.0',
+                            revision_id='67308bd628c6235dbc1bad60c9ad1f2d27d576cc')}
         """
         self.create()
         return dict((r.tag, r) for r in self.find_tags())
@@ -620,7 +642,9 @@ class Repository(object):
 
         >>> from vcs_repo_mgr import GitRepo
         >>> from pprint import pprint
-        >>> repository = GitRepo(remote='https://github.com/git/git.git', release_scheme='tags', release_filter=r'^v(\d+(?:\.\d+)*)$')
+        >>> repository = GitRepo(remote='https://github.com/git/git.git',
+        ...                      release_scheme='tags',
+        ...                      release_filter=r'^v(\d+(?:\.\d+)*)$')
         >>> pprint(repository.ordered_releases[-10:])
         [Release(revision=Revision(..., tag='v2.2.2', ...), identifier='2.2.2'),
          Release(revision=Revision(..., tag='v2.3.0', ...), identifier='2.3.0'),
@@ -743,6 +767,7 @@ class Repository(object):
             fields.append("remote=%r" % self.remote)
         return "%s(%s)" % (self.__class__.__name__, ', '.join(fields))
 
+
 class Revision(object):
 
     """
@@ -811,6 +836,7 @@ class Revision(object):
         fields.append("revision_id=%r" % self.revision_id)
         return "%s(%s)" % (self.__class__.__name__, ', '.join(fields))
 
+
 class Release(object):
 
     """
@@ -859,6 +885,7 @@ class Release(object):
             "identifier=%r" % self.identifier,
         ]))
 
+
 class HgRepo(Repository):
 
     """
@@ -885,15 +912,19 @@ class HgRepo(Repository):
     def find_revision_number(self, revision=None):
         self.create()
         revision = revision or self.default_revision
-        result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--num', capture=True).rstrip('+')
-        assert result and result.isdigit(), "Failed to find local revision number! ('hg id --num' gave unexpected output)"
+        result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--num',
+                         capture=True).rstrip('+')
+        assert result and result.isdigit(), \
+            "Failed to find local revision number! ('hg id --num' gave unexpected output)"
         return int(result)
 
     def find_revision_id(self, revision=None):
         self.create()
         revision = revision or self.default_revision
-        result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--debug', '--id', capture=True).rstrip('+')
-        assert re.match('^[A-Fa-z0-9]+$', result), "Failed to find global revision id! ('hg id --id' gave unexpected output)"
+        result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--debug', '--id',
+                         capture=True).rstrip('+')
+        assert re.match('^[A-Fa-z0-9]+$', result), \
+            "Failed to find global revision id! ('hg id --id' gave unexpected output)"
         return result
 
     def find_branches(self):
@@ -917,6 +948,7 @@ class HgRepo(Repository):
                                revision_id=revision_id,
                                revision_number=int(revision_number),
                                tag=tokens[0])
+
 
 class GitRepo(Repository):
 
@@ -946,14 +978,16 @@ class GitRepo(Repository):
         self.create()
         revision = revision or self.default_revision
         result = execute('git', 'rev-list', revision, '--count', capture=True, directory=self.local)
-        assert result and result.isdigit(), "Failed to find local revision number! ('git rev-list --count' gave unexpected output)"
+        assert result and result.isdigit(), \
+            "Failed to find local revision number! ('git rev-list --count' gave unexpected output)"
         return int(result)
 
     def find_revision_id(self, revision=None):
         self.create()
         revision = revision or self.default_revision
         result = execute('git', 'rev-parse', revision, capture=True, directory=self.local)
-        assert re.match('^[A-Fa-z0-9]+$', result), "Failed to find global revision id! ('git rev-parse' gave unexpected output)"
+        assert re.match('^[A-Fa-z0-9]+$', result), \
+            "Failed to find global revision id! ('git rev-parse' gave unexpected output)"
         return result
 
     def find_branches(self):
@@ -975,6 +1009,7 @@ class GitRepo(Repository):
                 yield Revision(repository=self,
                                revision_id=tokens[0],
                                tag=tokens[1][len('refs/tags/'):])
+
 
 class BzrRepo(Repository):
 
@@ -1028,7 +1063,8 @@ class BzrRepo(Repository):
     def find_revision_id(self, revision=None):
         self.create()
         revision = revision or self.default_revision
-        result = execute('bzr', 'version-info', '--revision=%s' % revision, '--custom', '--template={revision_id}', capture=True, directory=self.local)
+        result = execute('bzr', 'version-info', '--revision=%s' % revision, '--custom', '--template={revision_id}',
+                         capture=True, directory=self.local)
         logger.debug("Output of 'bzr version-info' command: %s", result)
         assert result, "Failed to find global revision id! ('bzr version-info' gave unexpected output)"
         return result
@@ -1057,5 +1093,3 @@ class BzrRepo(Repository):
                 yield Revision(repository=self,
                                revision_id=tokens[1],
                                tag=tokens[0])
-
-# vim: ts=4 sw=4 et

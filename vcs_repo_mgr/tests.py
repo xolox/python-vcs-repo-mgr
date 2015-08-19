@@ -1,7 +1,7 @@
 # Automated tests for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 16, 2015
+# Last Change: August 19, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -22,10 +22,16 @@ from six.moves import StringIO
 # The module we're testing.
 import vcs_repo_mgr
 from vcs_repo_mgr import (
-        AmbiguousRepositoryNameError, coerce_repository,
-        find_configured_repository, GitRepo, HgRepo, limit_vcs_updates,
-        NoMatchingReleasesError, NoSuchRepositoryError,
-        UnknownRepositoryTypeError, UPDATE_VARIABLE
+    AmbiguousRepositoryNameError,
+    coerce_repository,
+    find_configured_repository,
+    GitRepo,
+    HgRepo,
+    limit_vcs_updates,
+    NoMatchingReleasesError,
+    NoSuchRepositoryError,
+    UnknownRepositoryTypeError,
+    UPDATE_VARIABLE,
 )
 from vcs_repo_mgr.cli import main
 
@@ -48,6 +54,7 @@ VCS_FIELD_PATTERN = re.compile('Vcs-Git: %s#[A-Fa-f0-9]+$' % re.escape(REMOTE_GI
 TEMPORARY_DIRECTORIES = []
 LOCAL_CHECKOUTS = {}
 
+
 def create_temporary_directory():
     """
     Create a temporary directory that will be cleaned up when the test suite is
@@ -56,6 +63,7 @@ def create_temporary_directory():
     temporary_directory = tempfile.mkdtemp()
     TEMPORARY_DIRECTORIES.append(temporary_directory)
     return temporary_directory
+
 
 def create_local_checkout(remote):
     """
@@ -68,12 +76,14 @@ def create_local_checkout(remote):
         LOCAL_CHECKOUTS[key] = create_temporary_directory()
     return LOCAL_CHECKOUTS[key]
 
+
 def tearDownModule():
     """
     Clean up temporary directories.
     """
     for directory in TEMPORARY_DIRECTORIES:
         shutil.rmtree(directory)
+
 
 class VcsRepoMgrTestCase(unittest.TestCase):
 
@@ -95,11 +105,22 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         - Invalid release schemes.
         - Invalid release filters.
         """
-        non_existing_repo = os.path.join(tempfile.gettempdir(), 'vcs-repo-mgr', 'non-existing-repo-%i' % random.randint(0, 1000))
+        non_existing_repo = os.path.join(tempfile.gettempdir(),
+                                         'vcs-repo-mgr',
+                                         'non-existing-repo-%i' % random.randint(0, 1000))
         self.assertRaises(ValueError, GitRepo)
         self.assertRaises(ValueError, GitRepo, local=non_existing_repo)
-        self.assertRaises(ValueError, GitRepo, local=non_existing_repo, remote=REMOTE_GIT_REPO, release_scheme='not-tags-and-not-branches')
-        self.assertRaises(ValueError, GitRepo, local=non_existing_repo, remote=REMOTE_GIT_REPO, release_scheme='tags', release_filter='regex with multiple (capture) (groups)')
+        self.assertRaises(ValueError,
+                          GitRepo,
+                          local=non_existing_repo,
+                          remote=REMOTE_GIT_REPO,
+                          release_scheme='not-tags-and-not-branches')
+        self.assertRaises(ValueError,
+                          GitRepo,
+                          local=non_existing_repo,
+                          remote=REMOTE_GIT_REPO,
+                          release_scheme='tags',
+                          release_filter='regex with multiple (capture) (groups)')
 
     def test_repository_coercion(self):
         """
@@ -132,8 +153,10 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(DIGITS_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-number')))
         # Test the --revision and --find-revision-id option.
         self.assertTrue(HEX_SUM_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-id')))
-        # Test the --release option (the literal given on the right hand side was manually verified to correspond to the 0.19 tag.
-        self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--release=0.19', '--find-revision-id').strip(), 'c70d28908e4f43341dcbdccc5a478348bf9b1488')
+        # Test the --release option (the literal given on the right hand side
+        # was manually verified to correspond to the 0.19 tag.
+        self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--release=0.19', '--find-revision-id').strip(),
+                         'c70d28908e4f43341dcbdccc5a478348bf9b1488')
         # Test the --vcs-control-field option.
         self.assertTrue(VCS_FIELD_PATTERN.match(call('--repository=test', '--vcs-control-field')))
         # Test the --find-directory option.
@@ -277,21 +300,25 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         Test ordering of tags and releases.
         """
         repository = coerce_repository(PIP_ACCEL_REPO)
+
         def find_tag_index(looking_for_tag):
             for i, revision in enumerate(repository.ordered_tags):
                 if revision.tag == looking_for_tag:
                     return i
             raise Exception("Failed to find tag by name!")
+
         # Regular sorting would screw up the order of the following two
         # examples so this is testing that the natural order sorting of tags
         # works as expected (Do What I Mean :-).
         self.assertTrue(find_tag_index('0.2') < find_tag_index('0.10'))
         self.assertTrue(find_tag_index('0.18') < find_tag_index('0.20'))
+
         def find_release_index(looking_for_release):
             for i, release in enumerate(repository.ordered_releases):
                 if release.identifier == looking_for_release:
                     return i
             raise Exception("Failed to find tag by name!")
+
         self.assertTrue(find_release_index('0.2') < find_release_index('0.10'))
         self.assertTrue(find_release_index('0.18') < find_release_index('0.20'))
 
@@ -330,7 +357,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(a is not c)
         self.assertTrue(b is not c)
 
-    def create_repo_using_config(self, repository_type, remote_location, second_repository_type=None, second_remote_location=None):
+    def create_repo_using_config(self, repository_type, remote_location,
+                                 second_repository_type=None,
+                                 second_remote_location=None):
         """
         Instantiate a :py:class:`.Repository` object by creating a temporary
         configuration file, thereby testing both configuration file handling
@@ -395,6 +424,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         for revision in revisions[:10]:
             self.validate_revision(revision, **kw)
 
+
 def call(*arguments):
     saved_stdout = sys.stdout
     saved_argv = sys.argv
@@ -406,5 +436,3 @@ def call(*arguments):
     finally:
         sys.stdout = saved_stdout
         sys.argv = saved_argv
-
-# vim: ts=4 sw=4 et

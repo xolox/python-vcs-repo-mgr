@@ -5,10 +5,12 @@ Python :py:keyword:`except` statement can be used to handle different types of
 errors in different ways.
 """
 
+
 class VcsRepoMgrError(Exception):
     """
     Base class for exceptions directly raised by :py:mod:`vcs_repo_mgr`.
     """
+
 
 class AmbiguousRepositoryNameError(VcsRepoMgrError):
     """
@@ -17,11 +19,13 @@ class AmbiguousRepositoryNameError(VcsRepoMgrError):
     repository names).
     """
 
+
 class NoMatchingReleasesError(VcsRepoMgrError):
     """
     Exception raised by :py:func:`~vcs_repo_mgr.Repository.select_release()`
     when no matching releases are found in the repository.
     """
+
 
 class NoSuchRepositoryError(VcsRepoMgrError):
     """
@@ -29,6 +33,7 @@ class NoSuchRepositoryError(VcsRepoMgrError):
     when the given repository name doesn't match any of the configured
     repositories.
     """
+
 
 class UnknownRepositoryTypeError(VcsRepoMgrError):
     """

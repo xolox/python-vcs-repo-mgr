@@ -1,7 +1,7 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 16, 2015
+# Last Change: August 19, 2015
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
@@ -16,6 +16,7 @@ default:
 	@echo '    make install    install the package in a virtual environment'
 	@echo '    make test       run the test suite'
 	@echo '    make coverage   run the tests, report coverage'
+	@echo '    make check      check the coding style'
 	@echo '    make docs       update documentation using Sphinx'
 	@echo '    make publish    publish changes to GitHub/PyPI'
 	@echo '    make clean      cleanup all temporary files'
@@ -37,6 +38,10 @@ coverage: install
 	$(ACTIVATE) && coverage run --source=vcs_repo_mgr setup.py test
 	$(ACTIVATE) && coverage html --omit=vcs_repo_mgr/tests.py
 	if [ "`whoami`" != root ] && which gnome-open >/dev/null 2>&1; then gnome-open htmlcov/index.html; fi
+
+check: install
+	test -x "$(VIRTUAL_ENV)/bin/flake8" || ($(ACTIVATE) && pip-accel install flake8)
+	$(ACTIVATE) && flake8
 
 docs: install
 	test -x "$(VIRTUAL_ENV)/bin/sphinx-build" || ($(ACTIVATE) && pip-accel install sphinx)

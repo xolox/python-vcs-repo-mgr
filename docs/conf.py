@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-#
-# documentation build configuration file for the 'vcs-repo-mgr' package. This
-# file is execfile()d with the current directory set to its containing dir.
 
-import sys, os
+"""Documentation build configuration file for the `vcs-repo-mgr` package."""
+
+import os
+import sys
 
 # Add the 'vcs-repo-mgr' source distribution's root directory to the module path.
 sys.path.insert(0, os.path.abspath('..'))
@@ -24,7 +24,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'vcs-repo-mgr'
-copyright = u'2014, Peter Odding'
+copyright = u'2015, Peter Odding'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -64,15 +64,11 @@ intersphinx_mapping = {'python': ('http://docs.python.org', None),
 # a list of builtin themes.
 html_theme = 'default'
 
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['static']
-
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'vcsrepomgrdoc'
 
+
 def setup(app):
-    # Based on http://stackoverflow.com/a/5599712/788200.
+    """Based on http://stackoverflow.com/a/5599712/788200."""
     app.connect('autodoc-skip-member', (lambda app, what, name, obj, skip, options:
                                         False if name == '__init__' else skip))
