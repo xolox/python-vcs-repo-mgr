@@ -64,7 +64,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.18.1'
+__version__ = '0.18.2'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -186,12 +186,19 @@ def find_configured_repository(name):
         if local_path:
             # Expand a leading tilde and/or environment variables.
             local_path = parse_path(local_path)
-        return repository_factory(vcs_type,
-                                  local=local_path,
-                                  remote=options.get('remote'),
-                                  bare=coerce_boolean(options.get('bare', 'true')),
-                                  release_scheme=options.get('release-scheme'),
-                                  release_filter=options.get('release-filter'))
+        bare = options.get('bare', None)
+        if bare is not None:
+            # Default to bare=None but enable configuration file(s)
+            # to enforce bare=True or bare=False.
+            bare = coerce_boolean(bare)
+        return repository_factory(
+            vcs_type,
+            local=local_path,
+            remote=options.get('remote'),
+            bare=bare,
+            release_scheme=options.get('release-scheme'),
+            release_filter=options.get('release-filter'),
+        )
 
 
 def repository_factory(vcs_type, **kw):
