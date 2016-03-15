@@ -440,8 +440,10 @@ class Repository(object):
         else:
             logger.info("Creating %s clone of %s at %s ..",
                         self.friendly_name, self.remote, self.local)
-            execute(self.create_command.format(local=pipes.quote(self.local),
-                                               remote=pipes.quote(self.remote)))
+            execute(self.create_command.format(
+                local=pipes.quote(self.local),
+                remote=pipes.quote(self.remote),
+            ))
             self.mark_updated()
             return True
 
@@ -467,8 +469,10 @@ class Repository(object):
             return
         logger.info("Updating %s clone of %s at %s ..",
                     self.friendly_name, self.remote, self.local)
-        execute(self.update_command.format(local=pipes.quote(self.local),
-                                           remote=pipes.quote(self.remote)))
+        execute(self.update_command.format(
+            local=pipes.quote(self.local),
+            remote=pipes.quote(self.remote),
+        ))
         self.mark_updated()
 
     def export(self, directory, revision=None):
@@ -487,9 +491,11 @@ class Repository(object):
         logger.info("Exporting revision %s of %s to %s ..", revision, self.local, directory)
         if not os.path.isdir(directory):
             os.makedirs(directory)
-        execute(self.export_command.format(local=pipes.quote(self.local),
-                                           revision=pipes.quote(revision),
-                                           directory=pipes.quote(directory)))
+        execute(self.export_command.format(
+            local=pipes.quote(self.local),
+            revision=pipes.quote(revision),
+            directory=pipes.quote(directory),
+        ))
 
     def find_revision_number(self, revision=None):
         """
