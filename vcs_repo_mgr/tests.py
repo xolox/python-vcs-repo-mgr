@@ -22,16 +22,19 @@ from six.moves import StringIO
 # The module we're testing.
 import vcs_repo_mgr
 from vcs_repo_mgr import (
-    AmbiguousRepositoryNameError,
-    coerce_repository,
-    find_configured_repository,
     GitRepo,
     HgRepo,
+    UPDATE_VARIABLE,
+    coerce_repository,
+    find_configured_repository,
     limit_vcs_updates,
+)
+from vcs_repo_mgr.exceptions import (
+    AmbiguousRepositoryNameError,
     NoMatchingReleasesError,
     NoSuchRepositoryError,
     UnknownRepositoryTypeError,
-    UPDATE_VARIABLE,
+    WorkingTreeNotCleanError,
 )
 from vcs_repo_mgr.cli import main
 
@@ -300,14 +303,14 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
         self.assertTrue(os.path.isdir(os.path.join(export_directory, 'apt')))
 
-    def check_working_tree_support(self, repository):
-        """Shared logic to check non-bare cloning support."""
+    def check_working_tree_support(self, source_repo, file_to_change='setup.py'):
+        """Shared logic to check working tree support."""
         # Make sure the source repository contains a bare checkout.
-        assert repository.is_bare, "Expected a bare repository checkout!"
+        assert source_repo.is_bare, "Expected a bare repository checkout!"
         # Create a clone of the repository that does have a working tree.
-        cloned_repo = repository.__class__(
+        cloned_repo = source_repo.__class__(
             local=create_temporary_directory(),
-            remote=repository.local,
+            remote=source_repo.local,
             bare=False,
         )
         # Make sure the clone doesn't exist yet.
@@ -318,6 +321,18 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         assert cloned_repo.exists
         # Make sure the clone has a working tree.
         assert not cloned_repo.is_bare
+        # Make sure we can check whether the working tree is clean.
+        assert cloned_repo.is_clean, "Expected working tree to be clean?!"
+        # If the working tree is clean this shouldn't raise an exception.
+        cloned_repo.ensure_clean()
+        # Now change the contents of a tracked file.
+        filename = os.path.join(cloned_repo.local, file_to_change)
+        with open(filename, 'a') as handle:
+            handle.write("\n# An innocent comment :-).\n")
+        # Make sure the working tree is no longer clean.
+        assert not cloned_repo.is_clean, "Expected working to be dirty?!"
+        # Once the working tree is dirty this should raise the expected exception.
+        self.assertRaises(WorkingTreeNotCleanError, cloned_repo.ensure_clean)
 
     def test_release_objects(self):
         """

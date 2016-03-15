@@ -54,3 +54,14 @@ class UnknownRepositoryTypeError(VcsRepoMgrError):
     Raised by :py:func:`~vcs_repo_mgr.find_configured_repository()` when it
     encounters a repository definition with an unknown type.
     """
+
+
+class WorkingTreeNotCleanError(VcsRepoMgrError):
+
+    """
+    Exception raised when a working tree contains changes to tracked files.
+
+    Raised by :py:func:`~vcs_repo_mgr.Repository.ensure_clean()` when it
+    encounters a repository whose local working tree contains changes to
+    tracked files.
+    """

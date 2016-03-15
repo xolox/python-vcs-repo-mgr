@@ -60,10 +60,11 @@ from vcs_repo_mgr.exceptions import (
     NoMatchingReleasesError,
     NoSuchRepositoryError,
     UnknownRepositoryTypeError,
+    WorkingTreeNotCleanError,
 )
 
 # Semi-standard module versioning.
-__version__ = '0.17'
+__version__ = '0.18'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -525,6 +526,24 @@ class Repository(object):
         """:data:`True` if the repository is a bare checkout, :data:`False` otherwise."""
         raise NotImplementedError()
 
+    @property
+    def is_clean(self):
+        """:data:`True` if the working tree is clean, :data:`False` otherwise."""
+        raise NotImplementedError()
+
+    def ensure_clean(self):
+        """
+        Make sure the working tree is clean (contains no changes to tracked files).
+
+        :raises: :py:exc:`~vcs_repo_mgr.exceptions.WorkingTreeNotCleanError`
+                 when the working tree contains changes to tracked files.
+        """
+        if not self.is_clean:
+            raise WorkingTreeNotCleanError(compact("""
+                The repository's local working tree ({local})
+                contains changes to tracked files!
+            """, local=self.local))
+
     def find_revision_number(self, revision=None):
         """
         Find the local revision number of the given revision.
@@ -973,6 +992,13 @@ class HgRepo(Repository):
         except Exception:
             return False
 
+    @property
+    def is_clean(self):
+        """:data:`True` if the working tree is clean, :data:`False` otherwise."""
+        self.create()
+        listing = execute('hg', 'diff', capture=True, directory=self.local)
+        return len(listing.splitlines()) == 0
+
     def find_revision_number(self, revision=None):
         """
         Find the revision number of the given revision expression.
@@ -1087,6 +1113,13 @@ class GitRepo(Repository):
             capture=True, directory=self.local,
         ))
 
+    @property
+    def is_clean(self):
+        """:data:`True` if the working tree is clean, :data:`False` otherwise."""
+        self.create()
+        listing = execute('git', 'diff', capture=True, directory=self.local)
+        return len(listing.splitlines()) == 0
+
     def find_revision_number(self, revision=None):
         """
         Find the revision number of the given revision expression.
@@ -1182,6 +1215,13 @@ class BzrRepo(Repository):
         """
         self.create()
         return not os.path.isdir(os.path.join(self.vcs_directory, 'checkout'))
+
+    @property
+    def is_clean(self):
+        """:data:`True` if the working tree is clean, :data:`False` otherwise."""
+        self.create()
+        listing = execute('bzr', 'diff', check=False, capture=True, directory=self.local)
+        return len(listing.splitlines()) == 0
 
     def find_revision_number(self, revision=None):
         """
