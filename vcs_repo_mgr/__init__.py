@@ -65,12 +65,14 @@ from vcs_repo_mgr.exceptions import (
 # Semi-standard module versioning.
 __version__ = '0.15.1'
 
-# Known configuration file locations.
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
-SYSTEM_CONFIG_FILE = '/etc/vcs-repo-mgr.ini'
+"""The absolute pathname of the user-specific configuration file (a string)."""
 
-# Environment variable used to rate limit repository updates.
+SYSTEM_CONFIG_FILE = '/etc/vcs-repo-mgr.ini'
+"""The absolute pathname of the system wide configuration file (a string)."""
+
 UPDATE_VARIABLE = 'VCS_REPO_MGR_UPDATE_LIMIT'
+"""The name of the environment variable that's used to rate limit repository updates (a string)."""
 
 # Initialize a logger.
 logger = logging.getLogger(__name__)
