@@ -31,7 +31,7 @@ copyright = u'2015, Peter Odding'
 # built documents.
 
 # Find the package version and make it the release.
-from vcs_repo_mgr import __version__ as vcs_repo_mgr_version
+from vcs_repo_mgr import __version__ as vcs_repo_mgr_version  # noqa
 
 # The short X.Y version.
 version = '.'.join(vcs_repo_mgr_version.split('.')[:2])
