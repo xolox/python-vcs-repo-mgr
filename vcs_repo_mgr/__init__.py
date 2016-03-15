@@ -48,7 +48,7 @@ import time
 
 # External dependencies.
 from executor import execute
-from humanfriendly import coerce_boolean, compact, concatenate, format_path, parse_path
+from humanfriendly import coerce_boolean, compact, concatenate, format, format_path, parse_path
 from natsort import natsort, natsort_key
 from six import string_types
 from six.moves import configparser
@@ -63,7 +63,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.16'
+__version__ = '0.17'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -148,6 +148,7 @@ def find_configured_repository(name):
        type = git
        local = ~/projects/vcs-repo-mgr
        remote = git@github.com:xolox/python-vcs-repo-mgr.git
+       bare = true
        release-scheme = tags
        release-filter = .*
 
@@ -187,6 +188,7 @@ def find_configured_repository(name):
         return repository_factory(vcs_type,
                                   local=local_path,
                                   remote=options.get('remote'),
+                                  bare=coerce_boolean(options.get('bare', 'true')),
                                   release_scheme=options.get('release-scheme'),
                                   release_filter=options.get('release-filter'))
 
@@ -299,7 +301,7 @@ class Repository(object):
     :class:`GitRepo` instead.
     """
 
-    def __init__(self, local=None, remote=None, release_scheme=None, release_filter=None):
+    def __init__(self, local=None, remote=None, bare=True, release_scheme=None, release_filter=None):
         """
         Initialize a version control repository interface.
 
@@ -316,6 +318,10 @@ class Repository(object):
         :param remote: The URL of the remote repository (a string). If this is
                        not given then the local directory must already exist
                        and contain a supported repository.
+        :param bare: :data:`True` if the repository doesn't need a working tree
+                     (the default and previously the only option),
+                     :data:`False` if the repository does need a working
+                     tree.
         :param release_scheme: One of the strings 'tags' (the default) or
                                'branches'. This determines whether
                                :py:attr:`Repository.releases` is based on
@@ -338,6 +344,9 @@ class Repository(object):
                    repository location is specified.
                  - The local repository directory doesn't exist and no remote
                    repository location is specified.
+                 - The local repository directory already exists but the
+                   :attr:`is_bare` status doesn't match the status requested
+                   with the `bare` keyword argument.
                  - The given release scheme is not 'tags' or 'branches'.
                  - The release filter regular expression contains more than one
                    capture group (if you need additional groups but without the
@@ -345,6 +354,7 @@ class Repository(object):
         """
         self.local = local
         self.remote = remote
+        self.bare = bare
         self.release_scheme = release_scheme or 'tags'
         self.release_filter = release_filter or '.*'
         # Make sure the caller specified at least the local *or* remote.
@@ -360,6 +370,14 @@ class Repository(object):
         if not (self.exists or self.remote):
             msg = "Local repository (%r) doesn't exist and no remote repository specified!"
             raise ValueError(msg % self.local)
+        # Make sure existing local clones match caller's expectations.
+        if self.exists and self.bare != self.is_bare:
+            raise ValueError(format(
+                "%s was requested but existing local clone (%s) is a %s!",
+                "Bare checkout" if self.bare else "Checkout with working tree",
+                self.local,
+                "bare checkout" if self.is_bare else "checkout with a working tree",
+            ))
         # Make sure the release scheme was properly specified.
         if self.release_scheme not in KNOWN_RELEASE_SCHEMES:
             msg = "Release scheme %r is not supported! (valid options are %s)"
@@ -444,7 +462,8 @@ class Repository(object):
         else:
             logger.info("Creating %s clone of %s at %s ..",
                         self.friendly_name, self.remote, self.local)
-            execute(self.create_command.format(
+            template = self.create_command if self.bare else self.create_command_non_bare
+            execute(template.format(
                 local=pipes.quote(self.local),
                 remote=pipes.quote(self.remote),
             ))
@@ -503,13 +522,8 @@ class Repository(object):
 
     @property
     def is_bare(self):
-        """
-        :data:`True` if the repository is a bare checkout, :data:`False` otherwise.
-
-        This property's value defaults to :data:`False` which means subclasses
-        are not forced to implement this property if it doesn't make sense.
-        """
-        return False
+        """:data:`True` if the repository is a bare checkout, :data:`False` otherwise."""
+        raise NotImplementedError()
 
     def find_revision_number(self, revision=None):
         """
@@ -931,6 +945,7 @@ class HgRepo(Repository):
     default_revision = 'default'
     control_field = 'Vcs-Hg'
     create_command = 'hg clone --noupdate {remote} {local}'
+    create_command_non_bare = 'hg clone {remote} {local}'
     update_command = 'hg pull --repository {local} {remote}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
@@ -1035,6 +1050,7 @@ class GitRepo(Repository):
     default_revision = 'master'
     control_field = 'Vcs-Git'
     create_command = 'git clone --bare {remote} {local}'
+    create_command_non_bare = 'git clone {remote} {local}'
     update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
 
@@ -1141,7 +1157,8 @@ class BzrRepo(Repository):
     friendly_name = 'Bazaar'
     default_revision = 'last:1'
     control_field = 'Vcs-Bzr'
-    create_command = 'bzr branch --use-existing-dir {remote} {local}'
+    create_command = 'bzr branch --no-tree --use-existing-dir {remote} {local}'
+    create_command_non_bare = 'bzr branch --use-existing-dir {remote} {local}'
     update_command = 'cd {local} && bzr pull {remote}'
     export_command = 'cd {local} && bzr export --revision={revision} {directory}'
 
@@ -1154,6 +1171,17 @@ class BzrRepo(Repository):
     def exists(self):
         """:data:`True` if the repository already exists, :data:`False` otherwise."""
         return os.path.isfile(os.path.join(self.vcs_directory, 'branch-format'))
+
+    @property
+    def is_bare(self):
+        """
+        :data:`True` if the repository is a bare checkout, :data:`False` otherwise.
+
+        Checks whether the ``.bzr/checkout`` directory exists (it doesn't exist
+        in Bazaar repositories created using ``bzr branch --no-tree ...``).
+        """
+        self.create()
+        return not os.path.isdir(os.path.join(self.vcs_directory, 'checkout'))
 
     def find_revision_number(self, revision=None):
         """

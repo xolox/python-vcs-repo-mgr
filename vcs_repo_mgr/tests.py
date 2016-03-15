@@ -205,6 +205,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         assert repository.exists, "Expected local Mercurial checkout to exist!"
         # Test HGRepo.is_bare on an existing repository.
         assert repository.is_bare, "Expected bare Mercurial checkout!"
+        # Test working tree support.
+        self.check_working_tree_support(repository)
         # Test HgRepo.update().
         repository.update()
         # Test repr(HgRepo).
@@ -240,6 +242,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         assert repository.exists, "Expected local Git checkout to exist!"
         # Test GitRepo.is_bare on an existing repository.
         assert repository.is_bare, "Expected bare Git checkout!"
+        # Test working tree support.
+        self.check_working_tree_support(repository)
         # Test GitRepo.update().
         repository.update()
         # Test repr(GitRepo).
@@ -271,10 +275,10 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         repository.create()
         # Test BzrRepo.exists on an existing repository.
         assert repository.exists, "Expected local Bazaar checkout to exist!"
-        # Test BzrRepo.is_bare on an existing repository (Bazaar support in
-        # vcs-repo-mgr doesn't include bare checkouts because I don't know
-        # whether this concept even exists in Bazaar :-).
-        assert not repository.is_bare, "Expected non-bare Bazaar checkout!"
+        # Test BzrRepo.is_bare on an existing repository.
+        assert repository.is_bare, "Expected bare Bazaar checkout!"
+        # Test working tree support.
+        self.check_working_tree_support(repository)
         # Test BzrRepo.update().
         repository.update()
         # Test repr(BzrRepo).
@@ -295,6 +299,25 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Make sure the contents were properly exported.
         self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
         self.assertTrue(os.path.isdir(os.path.join(export_directory, 'apt')))
+
+    def check_working_tree_support(self, repository):
+        """Shared logic to check non-bare cloning support."""
+        # Make sure the source repository contains a bare checkout.
+        assert repository.is_bare, "Expected a bare repository checkout!"
+        # Create a clone of the repository that does have a working tree.
+        cloned_repo = repository.__class__(
+            local=create_temporary_directory(),
+            remote=repository.local,
+            bare=False,
+        )
+        # Make sure the clone doesn't exist yet.
+        assert not cloned_repo.exists
+        # Create the clone.
+        cloned_repo.create()
+        # Make sure the clone was created.
+        assert cloned_repo.exists
+        # Make sure the clone has a working tree.
+        assert not cloned_repo.is_bare
 
     def test_release_objects(self):
         """
