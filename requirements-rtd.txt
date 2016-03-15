@@ -1,0 +1,6 @@
+# This pip requirements file is used to force Read the Docs to install
+# vcs-repo-mgr and its dependencies (specifically Mercurial) using pip
+# instead of `python setup.py install' because the latter fails:
+# https://readthedocs.org/projects/vcs-repo-mgr/builds/3820035/
+
+.
