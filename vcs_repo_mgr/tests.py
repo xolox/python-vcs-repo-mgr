@@ -105,7 +105,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def test_argument_checking(self):
         """
-        Test that subclasses of :py:class:`Repository` raise an exception on:
+        Test that subclasses of :class:`Repository` raise an exception on:
 
         - Non-existing local directories when no remote location is given.
         - Invalid release schemes.
@@ -397,7 +397,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         """
         Test caching of previously loaded repository objects.
 
-        This method tests that :py:func:`coerce_repository()` and similar
+        This method tests that :func:`coerce_repository()` and similar
         functions don't construct duplicate repository objects but return the
         previously constructed instance instead.
         """
@@ -415,7 +415,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         """
         Test configuration file loading.
 
-        Instantiates a :py:class:`.Repository` object by creating a temporary
+        Instantiates a :class:`.Repository` object by creating a temporary
         configuration file, thereby testing both configuration file handling
         and repository instantiation.
         """
@@ -459,7 +459,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
 
     def validate_revision(self, revision, id_pattern=HEX_SUM_PATTERN):
         """
-        Perform some generic sanity checks on :py:class:`Revision` objects.
+        Perform some generic sanity checks on :class:`Revision` objects.
         """
         self.assertTrue(revision.revision_number > 0)
         self.assertTrue(isinstance(repr(revision), str))
@@ -470,7 +470,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         Validate the given dictionary of revisions.
 
         Performs some generic sanity checks on a dictionary with
-        :py:class:`Revision` values. Randomly picks some revisions to sanity
+        :class:`Revision` values. Randomly picks some revisions to sanity
         check (calculating the local revision number of a revision requires the
         execution of an external command and there's really no point in doing
         this hundreds of times).

@@ -10,29 +10,29 @@ Python API for the `vcs-repo-mgr` package.
 When using `vcs-repo-mgr` as a Python API the following top level entities
 should help you get started:
 
-- The :py:class:`Repository` class implements most of the functionality exposed
+- The :class:`Repository` class implements most of the functionality exposed
   by the `vcs-repo-mgr` project. In practice you'll use one of the subclasses
-  which implement support for a specific VCS system (:py:class:`BzrRepo`,
-  :py:class:`GitRepo` and :py:class:`HgRepo`).
+  which implement support for a specific VCS system (:class:`BzrRepo`,
+  :class:`GitRepo` and :class:`HgRepo`).
 
-  - :py:class:`Repository` objects construct :py:class:`Revision` and
-    :py:class:`Release` objects so you'll most likely be using these.
+  - :class:`Repository` objects construct :class:`Revision` and
+    :class:`Release` objects so you'll most likely be using these.
 
-- The :py:func:`find_configured_repository()` function constructs instances of
-  :py:class:`Repository` subclasses based on configuration files. This is
+- The :func:`find_configured_repository()` function constructs instances of
+  :class:`Repository` subclasses based on configuration files. This is
   useful when you find yourself frequently instantiating the same
-  :py:class:`Repository` instances and you'd rather refer to a repository name
+  :class:`Repository` instances and you'd rather refer to a repository name
   in your code than repeating the complete local and remote locations
   everywhere in your code (this kind of duplication is bad after all :-).
 
-- You can choose to directly instantiate :py:class:`BzrRepo`,
-  :py:class:`GitRepo` and/or :py:class:`HgRepo` instances or you can use one of
+- You can choose to directly instantiate :class:`BzrRepo`,
+  :class:`GitRepo` and/or :class:`HgRepo` instances or you can use one of
   the helper functions that instantiate repository objects for you
-  (:py:func:`coerce_repository()` and :py:func:`repository_factory()`).
+  (:func:`coerce_repository()` and :func:`repository_factory()`).
 
 .. note:: This module handles subprocess management using the
-          :py:func:`executor.execute()` function which means
-          :py:exc:`executor.ExternalCommandFailed` can be
+          :func:`executor.execute()` function which means
+          :exc:`executor.ExternalCommandFailed` can be
           raised at any point.
 """
 
@@ -90,13 +90,13 @@ loaded_repositories = {}
 
 def coerce_repository(value):
     """
-    Convert a string (taken to be a repository name or URL) to a :py:class:`Repository` object.
+    Convert a string (taken to be a repository name or URL) to a :class:`Repository` object.
 
     :param value: The name or URL of a repository (a string or a
-                  :py:class:`Repository` object).
-    :returns: A :py:class:`Repository` object.
-    :raises: :py:exc:`~exceptions.ValueError` when the given ``value`` is not a
-             string or a :py:class:`Repository` object or if the value is a string but
+                  :class:`Repository` object).
+    :returns: A :class:`Repository` object.
+    :raises: :exc:`~exceptions.ValueError` when the given ``value`` is not a
+             string or a :class:`Repository` object or if the value is a string but
              doesn't match the name of any configured repository and also can't
              be parsed as the location of a remote repository.
     """
@@ -136,14 +136,14 @@ def find_configured_repository(name):
     Find a version control repository defined by the user in a configuration file.
 
     :param name: The name of the repository (a string).
-    :returns: A :py:class:`Repository` object.
-    :raises: :py:exc:`~vcs_repo_mgr.exceptions.NoSuchRepositoryError` when the
+    :returns: A :class:`Repository` object.
+    :raises: :exc:`~vcs_repo_mgr.exceptions.NoSuchRepositoryError` when the
              given repository name doesn't match any of the configured
              repositories.
-    :raises: :py:exc:`~vcs_repo_mgr.exceptions.AmbiguousRepositoryNameError`
+    :raises: :exc:`~vcs_repo_mgr.exceptions.AmbiguousRepositoryNameError`
              when the given repository name is ambiguous (i.e. it matches
              multiple repository names).
-    :raises: :py:exc:`~vcs_repo_mgr.exceptions.UnknownRepositoryTypeError` when
+    :raises: :exc:`~vcs_repo_mgr.exceptions.UnknownRepositoryTypeError` when
              a repository definition with an unknown type is encountered.
 
     The following configuration files are supported:
@@ -196,12 +196,12 @@ def find_configured_repository(name):
 
 def repository_factory(vcs_type, **kw):
     """
-    Instantiate a :py:class:`Repository` object based on the given type and arguments.
+    Instantiate a :class:`Repository` object based on the given type and arguments.
 
     :param vcs_type: One of the strings 'bazaar', 'bzr', 'git', 'hg' or 'mercurial'.
-    :param kw: The keyword arguments to :py:func:`Repository.__init__()`.
-    :returns: A :py:class:`Repository` object.
-    :raises: :py:exc:`~vcs_repo_mgr.exceptions.UnknownRepositoryTypeError` when
+    :param kw: The keyword arguments to :func:`Repository.__init__()`.
+    :returns: A :class:`Repository` object.
+    :raises: :exc:`~vcs_repo_mgr.exceptions.UnknownRepositoryTypeError` when
              the given type is unknown.
     """
     # Resolve the VCS type string to a Repository subclass.
@@ -312,7 +312,7 @@ class Repository(object):
 
                       - The ``local`` argument can be omitted. In this case a
                         temporary directory with a stable location will be
-                        selected using :py:func:`find_cache_directory()`.
+                        selected using :func:`find_cache_directory()`.
                       - A non-existing local directory can be given, this
                         directory will be created by cloning the remote
                         repository.
@@ -325,21 +325,21 @@ class Repository(object):
                      tree.
         :param release_scheme: One of the strings 'tags' (the default) or
                                'branches'. This determines whether
-                               :py:attr:`Repository.releases` is based on
-                               :py:attr:`Repository.tags` or
-                               :py:attr:`Repository.branches`.
+                               :attr:`Repository.releases` is based on
+                               :attr:`Repository.tags` or
+                               :attr:`Repository.branches`.
         :param release_filter: A string containing a regular expression or the
-                               result of :py:func:`re.compile()`. The regular
+                               result of :func:`re.compile()`. The regular
                                expression is used by
-                               :py:attr:`Repository.releases` to match tags or
+                               :attr:`Repository.releases` to match tags or
                                branches that signify "releases". If the regular
                                expression contains a single capture group, the
-                               identifier of a :py:class:`Release` object is
+                               identifier of a :class:`Release` object is
                                set to the substring captured by the capture
                                group (instead of the complete tag or branch
                                name). This defaults to the regular expression
                                ``.*`` matching any branch or tag name.
-        :raises: :py:exc:`~exceptions.ValueError` for any of the following:
+        :raises: :exc:`~exceptions.ValueError` for any of the following:
 
                  - Neither the local repository directory nor the remote
                    repository location is specified.
@@ -419,7 +419,7 @@ class Repository(object):
         """
         The pathname of the file used to mark the last successful update (a string).
 
-        Used internally by the :py:attr:`last_updated` property.
+        Used internally by the :attr:`last_updated` property.
         """
         return os.path.join(self.vcs_directory, 'vcs-repo-mgr.txt')
 
@@ -428,8 +428,8 @@ class Repository(object):
         """
         Find the date and time when `vcs-repo-mgr` last checked for updates.
 
-        Used internally by the :py:func:`update()` method when used in
-        combination with :py:class:`limit_vcs_updates`.
+        Used internally by the :func:`update()` method when used in
+        combination with :class:`limit_vcs_updates`.
 
         :returns: The number of seconds since the UNIX epoch (0 for remote
                   repositories that don't have a local clone yet).
@@ -442,9 +442,9 @@ class Repository(object):
 
     def mark_updated(self):
         """
-        Mark a successful repository update so that :py:attr:`last_updated` can report it.
+        Mark a successful repository update so that :attr:`last_updated` can report it.
 
-        Used internally by the :py:func:`update()` method.
+        Used internally by the :func:`update()` method.
         """
         with open(self.last_updated_file, 'w') as handle:
             handle.write('%i\n' % time.time())
@@ -475,7 +475,7 @@ class Repository(object):
         """
         Update the local clone of the remote version control repository.
 
-        If used in combination with :py:class:`limit_vcs_updates` this won't
+        If used in combination with :class:`limit_vcs_updates` this won't
         perform redundant updates.
 
         .. note:: Automatically creates the local repository on the first run.
@@ -535,7 +535,7 @@ class Repository(object):
         """
         Make sure the working tree is clean (contains no changes to tracked files).
 
-        :raises: :py:exc:`~vcs_repo_mgr.exceptions.WorkingTreeNotCleanError`
+        :raises: :exc:`~vcs_repo_mgr.exceptions.WorkingTreeNotCleanError`
                  when the working tree contains changes to tracked files.
         """
         if not self.is_clean:
@@ -597,8 +597,8 @@ class Repository(object):
         """
         Find information about the branches in the version control repository.
 
-        :returns: A :py:class:`dict` with branch names (strings) as keys and
-                  :py:class:`Revision` objects as values.
+        :returns: A :class:`dict` with branch names (strings) as keys and
+                  :class:`Revision` objects as values.
 
         .. note:: Automatically creates the local repository on the first run.
 
@@ -622,7 +622,7 @@ class Repository(object):
         """
         Find information about the branches in the version control repository.
 
-        :returns: An ordered :py:class:`list` of :py:class:`Revision` objects.
+        :returns: An ordered :class:`list` of :class:`Revision` objects.
                   The list is ordered by performing a `natural order sort
                   <https://pypi.python.org/pypi/naturalsort>`_ of branch names
                   in ascending order (i.e. the first value is the "oldest"
@@ -637,8 +637,8 @@ class Repository(object):
         """
         Find information about the tags in the version control repository.
 
-        :returns: A :py:class:`dict` with tag names (strings) as keys and
-                  :py:class:`Revision` objects as values.
+        :returns: A :class:`dict` with tag names (strings) as keys and
+                  :class:`Revision` objects as values.
 
         .. note:: Automatically creates the local repository on the first run.
 
@@ -676,7 +676,7 @@ class Repository(object):
         """
         Find information about the tags in the version control repository.
 
-        :returns: An ordered :py:class:`list` of :py:class:`Revision` objects.
+        :returns: An ordered :class:`list` of :class:`Revision` objects.
                   The list is ordered by performing a `natural order sort
                   <https://pypi.python.org/pypi/naturalsort>`_ of tag names
                   in ascending order (i.e. the first value is the "oldest"
@@ -691,8 +691,8 @@ class Repository(object):
         r"""
         Find information about the releases in the version control repository.
 
-        :returns: A :py:class:`dict` with release identifiers (strings) as keys
-                  and :py:class:`Release` objects as values.
+        :returns: A :class:`dict` with release identifiers (strings) as keys
+                  and :class:`Release` objects as values.
 
         .. note:: Automatically creates the local repository on the first run.
 
@@ -736,7 +736,7 @@ class Repository(object):
         """
         Find information about the releases in the version control repository.
 
-        :returns: An ordered :py:class:`list` of :py:class:`Release` objects.
+        :returns: An ordered :class:`list` of :class:`Release` objects.
                   The list is ordered by performing a `natural order sort
                   <https://pypi.python.org/pypi/naturalsort>`_ of release
                   identifiers in ascending order (i.e. the first value is the
@@ -755,7 +755,7 @@ class Repository(object):
                                         the upper bound for the selection (a
                                         string).
         :returns: The identifier of the selected release (a string).
-        :raises: :py:exc:`~vcs_repo_mgr.exceptions.NoMatchingReleasesError`
+        :raises: :exc:`~vcs_repo_mgr.exceptions.NoMatchingReleasesError`
                  when no matching releases are found.
         """
         matching_releases = []
@@ -773,9 +773,9 @@ class Repository(object):
         """
         Shortcut to translate a release identifier to a branch name.
 
-        :param release_id: A :py:attr:`Release.identifier` value (a string).
+        :param release_id: A :attr:`Release.identifier` value (a string).
         :returns: A branch name (a string).
-        :raises: :py:exc:`~exceptions.TypeError` when the repository is not
+        :raises: :exc:`~exceptions.TypeError` when the repository is not
                  using branches as its release scheme.
         """
         if self.release_scheme != 'branches':
@@ -786,9 +786,9 @@ class Repository(object):
         """
         Shortcut to translate a release identifier to a tag name.
 
-        :param release_id: A :py:attr:`Release.identifier` value (a string).
+        :param release_id: A :attr:`Release.identifier` value (a string).
         :returns: A tag name (a string).
-        :raises: :py:exc:`~exceptions.TypeError` when the repository is not
+        :raises: :exc:`~exceptions.TypeError` when the repository is not
                  using tags as its release scheme.
         """
         if self.release_scheme != 'tags':
@@ -800,10 +800,10 @@ class Repository(object):
         Find information about the branches in the version control repository.
 
         This is an internal method that is expected to be implemented by
-        subclasses of :py:class:`Repository` and is used by
-        :py:attr:`Repository.branches`.
+        subclasses of :class:`Repository` and is used by
+        :attr:`Repository.branches`.
 
-        :returns: A generator of :py:class:`Revision` objects.
+        :returns: A generator of :class:`Revision` objects.
         """
         raise NotImplementedError()
 
@@ -812,10 +812,10 @@ class Repository(object):
         Find information about the tags in the version control repository.
 
         This is an internal method that is expected to be implemented by
-        subclasses of :py:class:`Repository` and is used by
-        :py:attr:`Repository.tags`.
+        subclasses of :class:`Repository` and is used by
+        :attr:`Repository.tags`.
 
-        :returns: A generator of :py:class:`Revision` objects.
+        :returns: A generator of :class:`Revision` objects.
         """
         raise NotImplementedError()
 
@@ -838,7 +838,7 @@ class Revision(object):
 
     .. py:attribute:: repository
 
-       The :py:class:`Repository` object of the version control repository
+       The :class:`Repository` object of the version control repository
        containing the revision.
 
     .. py:attribute:: revision_id
@@ -867,9 +867,9 @@ class Revision(object):
 
     def __init__(self, repository, revision_id, revision_number=None, branch=None, tag=None):
         """
-        Create a :py:class:`Revision` object.
+        Create a :class:`Revision` object.
 
-        :param repository: A :py:class:`Repository` object.
+        :param repository: A :class:`Repository` object.
         :param revision_id: A string containing a hexadecimal hash.
         :param revision_number: The revision number (an integer, optional).
         :param branch: The name of the branch (a string, optional).
@@ -909,22 +909,22 @@ class Release(object):
     Most version control repositories are used to store software projects and
     most software projects have the concept of "releases": *Specific versions
     of a software project that have been given a human and machine readable
-    version number (in one form or another).* :py:class:`Release` objects exist
+    version number (in one form or another).* :class:`Release` objects exist
     to capture this concept in a form that is concrete enough to be generally
     useful while being abstract enough to be used in various ways (because
     every software project has its own scheme for releases).
 
-    By default the :py:class:`Release` objects created by
-    :py:attr:`Repository.releases` are based on :py:attr:`Repository.tags`, but
-    using the ``release_scheme`` argument to the :py:class:`Repository`
+    By default the :class:`Release` objects created by
+    :attr:`Repository.releases` are based on :attr:`Repository.tags`, but
+    using the ``release_scheme`` argument to the :class:`Repository`
     constructor you can specify that releases should be based on
-    :py:attr:`Repository.branches` instead. Additionally you can use the
+    :attr:`Repository.branches` instead. Additionally you can use the
     ``release_filter`` argument to specify a regular expression that will be
     used to distinguish valid releases from other tags/branches.
 
     .. py:attribute:: revision
 
-       The :py:class:`Revision` that the release relates to.
+       The :class:`Revision` that the release relates to.
 
     .. py:attribute:: identifier
 
@@ -937,7 +937,7 @@ class Release(object):
         """
         Initialize a release.
 
-        :param revision: The :py:class:`Revision` that the release relates to.
+        :param revision: The :class:`Revision` that the release relates to.
         :param identifier: The (substring of the) tag or branch name that the
                            release is based on (a string).
         """

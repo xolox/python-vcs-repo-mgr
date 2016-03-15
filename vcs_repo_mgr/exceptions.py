@@ -3,7 +3,7 @@ Custom exception types raised by the `vcs-repo-mgr` package.
 
 When `vcs-repo-mgr` encounters known errors it will raise an exception. Most of
 these exceptions have special types that capture the type of error so that the
-Python :py:keyword:`except` statement can be used to handle different types of
+Python :keyword:`except` statement can be used to handle different types of
 errors in different ways.
 """
 
@@ -11,7 +11,7 @@ errors in different ways.
 class VcsRepoMgrError(Exception):
 
     """
-    Base class for exceptions directly raised by :py:mod:`vcs_repo_mgr`.
+    Base class for exceptions directly raised by :mod:`vcs_repo_mgr`.
     """
 
 
@@ -20,7 +20,7 @@ class AmbiguousRepositoryNameError(VcsRepoMgrError):
     """
     Exception raised when an ambiguous repository name is encountered.
 
-    Raised by :py:func:`~vcs_repo_mgr.find_configured_repository()` when the
+    Raised by :func:`~vcs_repo_mgr.find_configured_repository()` when the
     given repository name is ambiguous (i.e. it matches multiple repository
     names).
     """
@@ -31,7 +31,7 @@ class NoMatchingReleasesError(VcsRepoMgrError):
     """
     Exception raised when no matching releases are found.
 
-    Raised by :py:func:`~vcs_repo_mgr.Repository.select_release()` when no
+    Raised by :func:`~vcs_repo_mgr.Repository.select_release()` when no
     matching releases are found in the repository.
     """
 
@@ -41,7 +41,7 @@ class NoSuchRepositoryError(VcsRepoMgrError):
     """
     Exception raised when a repository by the given name doesn't exist.
 
-    Raised by :py:func:`~vcs_repo_mgr.find_configured_repository()` when the
+    Raised by :func:`~vcs_repo_mgr.find_configured_repository()` when the
     given repository name doesn't match any of the configured repositories.
     """
 
@@ -51,7 +51,7 @@ class UnknownRepositoryTypeError(VcsRepoMgrError):
     """
     Exception raised when a repository has an unknown type configured.
 
-    Raised by :py:func:`~vcs_repo_mgr.find_configured_repository()` when it
+    Raised by :func:`~vcs_repo_mgr.find_configured_repository()` when it
     encounters a repository definition with an unknown type.
     """
 
@@ -61,7 +61,7 @@ class WorkingTreeNotCleanError(VcsRepoMgrError):
     """
     Exception raised when a working tree contains changes to tracked files.
 
-    Raised by :py:func:`~vcs_repo_mgr.Repository.ensure_clean()` when it
+    Raised by :func:`~vcs_repo_mgr.Repository.ensure_clean()` when it
     encounters a repository whose local working tree contains changes to
     tracked files.
     """
