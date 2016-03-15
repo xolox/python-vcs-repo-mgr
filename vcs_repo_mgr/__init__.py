@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 19, 2015
+# Last Change: March 15, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -36,9 +36,6 @@ should help you get started:
           raised at any point.
 """
 
-# Semi-standard module versioning.
-__version__ = '0.15.1'
-
 # Standard library modules.
 import functools
 import logging
@@ -64,6 +61,9 @@ from vcs_repo_mgr.exceptions import (
     NoSuchRepositoryError,
     UnknownRepositoryTypeError,
 )
+
+# Semi-standard module versioning.
+__version__ = '0.15.1'
 
 # Known configuration file locations.
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
