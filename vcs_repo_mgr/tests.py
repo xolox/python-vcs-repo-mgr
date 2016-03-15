@@ -1,7 +1,7 @@
 """Automated tests for the `vcs-repo-mgr` package."""
 
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 19, 2015
+# Last Change: March 15, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -202,7 +202,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test HgRepo.create().
         repository.create()
         # Test HgRepo.exists on an existing repository.
-        self.assertEqual(repository.exists, True)
+        assert repository.exists, "Expected local Mercurial checkout to exist!"
+        # Test HGRepo.is_bare on an existing repository.
+        assert repository.is_bare, "Expected bare Mercurial checkout!"
         # Test HgRepo.update().
         repository.update()
         # Test repr(HgRepo).
@@ -235,7 +237,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test GitRepo.create().
         repository.create()
         # Test GitRepo.exists on an existing repository.
-        self.assertEqual(repository.exists, True)
+        assert repository.exists, "Expected local Git checkout to exist!"
+        # Test GitRepo.is_bare on an existing repository.
+        assert repository.is_bare, "Expected bare Git checkout!"
         # Test GitRepo.update().
         repository.update()
         # Test repr(GitRepo).
@@ -266,7 +270,11 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test BzrRepo.create().
         repository.create()
         # Test BzrRepo.exists on an existing repository.
-        self.assertEqual(repository.exists, True)
+        assert repository.exists, "Expected local Bazaar checkout to exist!"
+        # Test BzrRepo.is_bare on an existing repository (Bazaar support in
+        # vcs-repo-mgr doesn't include bare checkouts because I don't know
+        # whether this concept even exists in Bazaar :-).
+        assert not repository.is_bare, "Expected non-bare Bazaar checkout!"
         # Test BzrRepo.update().
         repository.update()
         # Test repr(BzrRepo).

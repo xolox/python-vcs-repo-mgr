@@ -48,7 +48,7 @@ import time
 
 # External dependencies.
 from executor import execute
-from humanfriendly import compact, concatenate, format_path, parse_path
+from humanfriendly import coerce_boolean, compact, concatenate, format_path, parse_path
 from natsort import natsort, natsort_key
 from six import string_types
 from six.moves import configparser
@@ -63,7 +63,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.15.1'
+__version__ = '0.16'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -501,6 +501,16 @@ class Repository(object):
             directory=pipes.quote(directory),
         ))
 
+    @property
+    def is_bare(self):
+        """
+        :data:`True` if the repository is a bare checkout, :data:`False` otherwise.
+
+        This property's value defaults to :data:`False` which means subclasses
+        are not forced to implement this property if it doesn't make sense.
+        """
+        return False
+
     def find_revision_number(self, revision=None):
         """
         Find the local revision number of the given revision.
@@ -934,6 +944,20 @@ class HgRepo(Repository):
         """:data:`True` if the repository already exists, :data:`False` otherwise."""
         return os.path.isdir(self.vcs_directory)
 
+    @property
+    def is_bare(self):
+        """
+        :data:`True` if the repository is a bare checkout, :data:`False` otherwise.
+
+        Runs the ``hg id`` command to check whether the (special) global
+        revision id ``000000000000`` is reported.
+        """
+        self.create()
+        try:
+            return int(execute('hg', 'id', capture=True, directory=self.local)) == 0
+        except Exception:
+            return False
+
     def find_revision_number(self, revision=None):
         """
         Find the revision number of the given revision expression.
@@ -1032,6 +1056,20 @@ class GitRepo(Repository):
     def exists(self):
         """:data:`True` if the repository already exists, :data:`False` otherwise."""
         return os.path.isfile(os.path.join(self.vcs_directory, 'config'))
+
+    @property
+    def is_bare(self):
+        """
+        :data:`True` if the repository is a bare checkout, :data:`False` otherwise.
+
+        Runs the ``git config --get core.bare`` command to check whether we're
+        dealing with a bare checkout.
+        """
+        self.create()
+        return coerce_boolean(execute(
+            'git', 'config', '--get', 'core.bare',
+            capture=True, directory=self.local,
+        ))
 
     def find_revision_number(self, revision=None):
         """
