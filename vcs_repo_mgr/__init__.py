@@ -74,6 +74,9 @@ SYSTEM_CONFIG_FILE = '/etc/vcs-repo-mgr.ini'
 UPDATE_VARIABLE = 'VCS_REPO_MGR_UPDATE_LIMIT'
 """The name of the environment variable that's used to rate limit repository updates (a string)."""
 
+KNOWN_RELEASE_SCHEMES = ('branches', 'tags')
+"""The names of valid release schemes (a tuple of strings)."""
+
 # Initialize a logger.
 logger = logging.getLogger(__name__)
 
@@ -358,10 +361,9 @@ class Repository(object):
             msg = "Local repository (%r) doesn't exist and no remote repository specified!"
             raise ValueError(msg % self.local)
         # Make sure the release scheme was properly specified.
-        known_release_schemes = ('branches', 'tags')
-        if self.release_scheme not in known_release_schemes:
+        if self.release_scheme not in KNOWN_RELEASE_SCHEMES:
             msg = "Release scheme %r is not supported! (valid options are %s)"
-            raise ValueError(msg % (self.release_scheme, concatenate(map(repr, known_release_schemes))))
+            raise ValueError(msg % (self.release_scheme, concatenate(map(repr, KNOWN_RELEASE_SCHEMES))))
         # Make sure the release filter is a valid regular expression. This code
         # is written so that callers can pass in their own compiled regular
         # expression if they want to do that.
