@@ -64,7 +64,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.18'
+__version__ = '0.18.1'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -302,7 +302,7 @@ class Repository(object):
     :class:`GitRepo` instead.
     """
 
-    def __init__(self, local=None, remote=None, bare=True, release_scheme=None, release_filter=None):
+    def __init__(self, local=None, remote=None, bare=None, release_scheme=None, release_filter=None):
         """
         Initialize a version control repository interface.
 
@@ -319,10 +319,22 @@ class Repository(object):
         :param remote: The URL of the remote repository (a string). If this is
                        not given then the local directory must already exist
                        and contain a supported repository.
-        :param bare: :data:`True` if the repository doesn't need a working tree
-                     (the default and previously the only option),
-                     :data:`False` if the repository does need a working
-                     tree.
+        :param bare: One of the following values:
+
+                     - :data:`True` if the repository doesn't need a working
+                       tree (in older versions of `vcs-repo-mgr` this was the
+                       default and only choice).
+                     - :data:`False` if the repository does need a working
+                       tree (e.g. because you want to create commits in the
+                       repository).
+                     - :data:`None` if you don't care and either option is
+                       acceptable.
+
+                     If you specify a preference for the existence of a working
+                     tree by passing a value for `bare` that isn't :data:`None`
+                     and the repository's local clone already exists, the local
+                     clone will be validated to make sure its state matches the
+                     caller's expectation.
         :param release_scheme: One of the strings 'tags' (the default) or
                                'branches'. This determines whether
                                :attr:`Repository.releases` is based on
@@ -345,9 +357,9 @@ class Repository(object):
                    repository location is specified.
                  - The local repository directory doesn't exist and no remote
                    repository location is specified.
-                 - The local repository directory already exists but the
-                   :attr:`is_bare` status doesn't match the status requested
-                   with the `bare` keyword argument.
+                 - The local repository directory already exists but
+                   :attr:`is_bare` doesn't match the status requested with the
+                   `bare` keyword argument.
                  - The given release scheme is not 'tags' or 'branches'.
                  - The release filter regular expression contains more than one
                    capture group (if you need additional groups but without the
@@ -361,24 +373,6 @@ class Repository(object):
         # Make sure the caller specified at least the local *or* remote.
         if not (self.local or self.remote):
             raise ValueError("No local and no remote repository specified! (one of the two is required)")
-        # If the caller specified a remote repository but no local clone we
-        # assume they don't care about the location of the local clone so we
-        # can make something up (i.e. vcs-repo-mgr will act as an exclusive
-        # proxy to the local clone).
-        if self.remote and not self.local:
-            self.local = find_cache_directory(self.remote)
-        # Make sure we know how to get access to (a copy of) the repository.
-        if not (self.exists or self.remote):
-            msg = "Local repository (%r) doesn't exist and no remote repository specified!"
-            raise ValueError(msg % self.local)
-        # Make sure existing local clones match caller's expectations.
-        if self.exists and self.bare != self.is_bare:
-            raise ValueError(format(
-                "%s was requested but existing local clone (%s) is a %s!",
-                "Bare checkout" if self.bare else "Checkout with working tree",
-                self.local,
-                "bare checkout" if self.is_bare else "checkout with a working tree",
-            ))
         # Make sure the release scheme was properly specified.
         if self.release_scheme not in KNOWN_RELEASE_SCHEMES:
             msg = "Release scheme %r is not supported! (valid options are %s)"
@@ -395,6 +389,36 @@ class Repository(object):
                 Release filter regular expression pattern is expected to have
                 zero or one capture group, but it has {count} instead!
             """, count=self.release_filter.groups))
+        # If the caller specified a remote repository but no local clone we
+        # assume they don't care about the location of the local clone so we
+        # can make something up (i.e. vcs-repo-mgr will act as an exclusive
+        # proxy to the local clone).
+        if self.remote and not self.local:
+            self.local = find_cache_directory(self.remote)
+        # Compute the `exists' property only once inside Repository.__init__().
+        if self.exists:
+            if self.bare is None:
+                # If the caller didn't specify their preference for the
+                # existence of a working tree then the existing repository
+                # state is acceptable either way :-).
+                self.bare = self.is_bare
+            elif self.bare != self.is_bare:
+                # Abort if the caller's preference for the existence of a
+                # working tree doesn't match the existing repository state.
+                raise ValueError(format(
+                    "%s was requested but existing local clone (%s) is a %s!",
+                    "Bare checkout" if self.bare else "Checkout with working tree",
+                    self.local,
+                    "bare checkout" if self.is_bare else "checkout with a working tree",
+                ))
+        else:
+            # Make sure we know how to get access to (a copy of) the repository.
+            if not self.remote:
+                msg = "Local repository (%r) doesn't exist and no remote repository specified!"
+                raise ValueError(msg % self.local)
+            # Default to bare=True for backwards compatibility.
+            if self.bare is None:
+                self.bare = True
 
     @property
     def vcs_directory(self):
