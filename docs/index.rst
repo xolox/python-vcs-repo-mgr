@@ -9,14 +9,20 @@ the ``vcs-repo-mgr`` package.
 .. contents::
    :local:
 
-The :py:mod:`vcs_repo_mgr` module
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+:mod:`vcs_repo_mgr`
+~~~~~~~~~~~~~~~~~~~
 
 .. automodule:: vcs_repo_mgr
    :members:
 
-The :py:mod:`vcs_repo_mgr.exceptions` module
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+:mod:`vcs_repo_mgr.cli`
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: vcs_repo_mgr.cli
+   :members:
+
+:mod:`vcs_repo_mgr.exceptions`
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. automodule:: vcs_repo_mgr.exceptions
    :members:

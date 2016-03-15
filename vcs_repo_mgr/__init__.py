@@ -135,6 +135,17 @@ def find_configured_repository(name):
     """
     Find a version control repository defined by the user in a configuration file.
 
+    :param name: The name of the repository (a string).
+    :returns: A :py:class:`Repository` object.
+    :raises: :py:exc:`~vcs_repo_mgr.exceptions.NoSuchRepositoryError` when the
+             given repository name doesn't match any of the configured
+             repositories.
+    :raises: :py:exc:`~vcs_repo_mgr.exceptions.AmbiguousRepositoryNameError`
+             when the given repository name is ambiguous (i.e. it matches
+             multiple repository names).
+    :raises: :py:exc:`~vcs_repo_mgr.exceptions.UnknownRepositoryTypeError` when
+             a repository definition with an unknown type is encountered.
+
     The following configuration files are supported:
 
     1. ``/etc/vcs-repo-mgr.ini``
@@ -155,17 +166,6 @@ def find_configured_repository(name):
 
     Three VCS types are currently supported: ``hg`` (``mercurial`` is also
     accepted), ``git`` and ``bzr`` (``bazaar`` is also accepted).
-
-    :param name: The name of the repository (a string).
-    :returns: A :py:class:`Repository` object.
-    :raises: :py:exc:`~vcs_repo_mgr.exceptions.NoSuchRepositoryError` when the
-             given repository name doesn't match any of the configured
-             repositories.
-    :raises: :py:exc:`~vcs_repo_mgr.exceptions.AmbiguousRepositoryNameError`
-             when the given repository name is ambiguous (i.e. it matches
-             multiple repository names).
-    :raises: :py:exc:`~vcs_repo_mgr.exceptions.UnknownRepositoryTypeError` when
-             a repository definition with an unknown type is encountered.
     """
     parser = configparser.RawConfigParser()
     for config_file in [SYSTEM_CONFIG_FILE, USER_CONFIG_FILE]:
@@ -239,11 +239,11 @@ def normalize_name(name):
     """
     Normalize a repository name.
 
-    This makes sure that minor variations in character case and/or punctuation
-    don't disrupt the name matching in :func:`find_configured_repository()`.
-
     :param name: The name of a repository (a string).
     :returns: The normalized repository name (a string).
+
+    This makes sure that minor variations in character case and/or punctuation
+    don't disrupt the name matching in :func:`find_configured_repository()`.
     """
     return re.sub('[^a-z0-9]', '', name.lower())
 

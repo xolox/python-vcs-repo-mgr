@@ -3,7 +3,7 @@
 """Setup script for the `vcs-repo-mgr' package."""
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: September 14, 2014
+# Last Change: March 15, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 import os
@@ -38,6 +38,8 @@ requirements = [l.strip() for l in open(join(source_directory, 'requirements.txt
 # users will be using Python 2.x in the foreseeable future I've decided to be
 # pragmatic about things and turn Mercurial into a conditional dependency.
 # See also: http://mercurial.selenic.com/wiki/SupportedPythonVersions
+#
+# TODO Make this compatible with binary wheels.
 if sys.version_info[0] == 2:
     requirements.append('bzr >= 2.6.0')
     requirements.append('mercurial >= 2.9')

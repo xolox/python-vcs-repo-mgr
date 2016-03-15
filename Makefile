@@ -1,7 +1,7 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 19, 2015
+# Last Change: March 15, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
@@ -42,6 +42,10 @@ coverage: install
 check: install
 	test -x "$(VIRTUAL_ENV)/bin/flake8" || ($(ACTIVATE) && pip-accel install flake8-pep257)
 	$(ACTIVATE) && flake8
+
+readme:
+	test -x "$(VIRTUAL_ENV)/bin/cog.py" || ($(ACTIVATE) && pip-accel install cogapp)
+	$(ACTIVATE) && cog.py -r README.rst
 
 docs: install
 	test -x "$(VIRTUAL_ENV)/bin/sphinx-build" || ($(ACTIVATE) && pip-accel install sphinx)

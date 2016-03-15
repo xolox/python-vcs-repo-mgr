@@ -11,7 +11,16 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- General configuration -----------------------------------------------------
 
 # Sphinx extension module names.
-extensions = ['sphinx.ext.doctest', 'sphinx.ext.autodoc', 'sphinx.ext.intersphinx']
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.doctest',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.viewcode',
+    'humanfriendly.sphinx',
+]
+
+# Configuration for the `autodoc' extension.
+autodoc_member_order = 'bysource'
 
 # Paths that contain templates, relative to this directory.
 templates_path = ['templates']
@@ -24,7 +33,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'vcs-repo-mgr'
-copyright = u'2015, Peter Odding'
+copyright = u'2016, Peter Odding'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
