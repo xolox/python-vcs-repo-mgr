@@ -338,20 +338,57 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         assert not cloned_repo.is_clean, "Expected working to be dirty?!"
         # Once the working tree is dirty this should raise the expected exception.
         self.assertRaises(WorkingTreeNotCleanError, cloned_repo.ensure_clean)
-        # Make sure that cleaning the working tree behaves as expected.
+        self.check_checkout_support(cloned_repo)
+        self.check_commit_support(cloned_repo)
+
+    def check_checkout_support(self, cloned_repo):
+        """Make sure that checkout() works and it can clean the working tree."""
         try:
             cloned_repo.checkout(clean=True)
         except NotImplementedError:
-            # The following tests are skipped when checkout() is not supported.
-            return
-        assert cloned_repo.is_clean, "Expected working tree to be clean?!"
-        # Make sure the repository has some tags.
-        assert cloned_repo.ordered_tags, "Need repository with tags to test checkout() support!"
-        # Check out some random tags.
-        available_tags = list(cloned_repo.tags.keys())
-        for i in range(5):
-            tag = random.choice(available_tags)
-            cloned_repo.checkout(revision=tag)
+            pass
+        else:
+            assert cloned_repo.is_clean, "Expected working tree to be clean?!"
+            # Make sure the repository has some tags.
+            assert cloned_repo.ordered_tags, "Need repository with tags to test checkout() support!"
+            # Check out some random tags.
+            available_tags = list(cloned_repo.tags.keys())
+            for i in range(5):
+                tag = random.choice(available_tags)
+                cloned_repo.checkout(revision=tag)
+
+    def check_commit_support(self, cloned_repo):
+        """Make sure we can make new commits."""
+        try:
+            # Make sure we start with a clean working tree.
+            cloned_repo.checkout(clean=True)
+            # Find a tracked file to modify (so we have something to commit).
+            made_changes = False
+            vcs_directory = os.path.abspath(cloned_repo.vcs_directory)
+            for root, dirs, files in os.walk(cloned_repo.local):
+                for filename in files:
+                    if not made_changes:
+                        # Make sure we don't directly change VCS metadata files.
+                        pathname = os.path.abspath(os.path.join(root, filename))
+                        common_prefix = os.path.commonprefix([vcs_directory, pathname])
+                        if common_prefix != vcs_directory:
+                            # Add a line to the end of the file.
+                            with open(pathname, 'a') as handle:
+                                handle.write('\n\n# This is a test\n')
+                            made_changes = True
+            # Get the global revision id of the most recent commit.
+            old_id = cloned_repo.find_revision_id()
+            # Make sure the working tree is no longer clean.
+            assert not cloned_repo.is_clean
+            # Commit the change we made.
+            cloned_repo.commit("This is a test")
+            # Make sure the working tree is clean again.
+            assert cloned_repo.is_clean
+            # Make sure the global revision id has changed.
+            new_id = cloned_repo.find_revision_id()
+            assert new_id != old_id
+        except NotImplementedError:
+            pass
 
     def test_release_objects(self):
         """

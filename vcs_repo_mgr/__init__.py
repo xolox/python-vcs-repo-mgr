@@ -43,13 +43,14 @@ Common operations
 The following table lists common repository operations supported by
 `vcs-repo-mgr` and their equivalent Bazaar, Git and Mercurial commands:
 
-=============================  ==========  ============  =========
-vcs-repo-mgr                   Bazaar      Git           Mercurial
-=============================  ==========  ============  =========
-:func:`Repository.create()`    bzr branch  git clone     hg clone
-:func:`Repository.update()`    bzr pull    git fetch     hg pull
-:func:`Repository.checkout()`  (n/a)       git checkout  hg update
-=============================  ==========  ============  =========
+=============================  =================  ============  =========
+vcs-repo-mgr                   Bazaar             Git           Mercurial
+=============================  =================  ============  =========
+:func:`Repository.create()`    bzr branch         git clone     hg clone
+:func:`Repository.update()`    bzr pull           git fetch     hg pull
+:func:`Repository.checkout()`  (not implemented)  git checkout  hg update
+:func:`Repository.commit()`    (not implemented)  git commit    hg commit
+=============================  =================  ============  =========
 """
 
 # Standard library modules.
@@ -80,7 +81,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.21'
+__version__ = '0.22'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -663,6 +664,23 @@ class Repository(PropertyManager):
             revision=revision,
         ))
 
+    def commit(self, message):
+        """
+        Commit changes to tracked files in the working tree.
+
+        :param message: The commit message (a string).
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        self.create()
+        logger.info("Committing changes in working tree of %s: %s", self.local, message)
+        execute(self.get_command(
+            method_name='commit',
+            attribute_name='commit_command',
+            local=self.local,
+            message=message,
+        ))
+
     def export(self, directory, revision=None):
         """
         Export the complete tree from the local version control repository.
@@ -1145,6 +1163,7 @@ class HgRepo(Repository):
     update_command = 'hg pull --repository {local} {remote}'
     checkout_command = 'hg update --repository {local} --rev {revision}'
     checkout_command_clean = 'hg update --repository {local} --rev {revision} --clean'
+    commit_command = 'hg commit --repository {local} --message {message}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
     @required_property
@@ -1263,6 +1282,7 @@ class GitRepo(Repository):
     update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
     checkout_command = 'cd {local} && git checkout {revision}'
     checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
+    commit_command = 'cd {local} && git commit --all --message {message}'
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
 
     @required_property
