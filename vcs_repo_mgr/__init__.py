@@ -256,12 +256,10 @@ def repository_factory(vcs_type, **kw):
     """
     # Resolve the VCS type string to a Repository subclass.
     vcs_type = vcs_type.lower()
-    if vcs_type in ('bzr', 'bazaar'):
-        constructor = BzrRepo
-    elif vcs_type == 'git':
-        constructor = GitRepo
-    elif vcs_type in ('hg', 'mercurial'):
-        constructor = HgRepo
+    for cls in REPOSITORY_TYPES:
+        if vcs_type in cls.ALIASES:
+            constructor = cls
+            break
     else:
         raise UnknownRepositoryTypeError("Unknown VCS repository type! (%r)" % vcs_type)
     # Generate a cache key that we will use to avoid constructing duplicates.
@@ -350,6 +348,16 @@ class Repository(PropertyManager):
 
     Please don't use this directly, use subclasses like :class:`HgRepo` and/or
     :class:`GitRepo` instead.
+    """
+
+    ALIASES = []
+    """
+    A list of strings with aliases/names for the repository type.
+
+    The :func:`repository_factory()` function searches the :attr:`ALIASES` of
+    all known subclasses of :class:`Repository` in order to map repository
+    specifications like ``hg+https://bitbucket.org/ianb/virtualenv`` to the
+    correct :class:`Repository` subclass.
     """
 
     def __init__(self, local=None, remote=None, bare=None, release_scheme=None, release_filter=None, **kw):
@@ -1282,6 +1290,9 @@ class HgRepo(Repository):
     .. _Mercurial: http://mercurial.selenic.com/
     """
 
+    ALIASES = ['hg', 'mercurial']
+    """A list of strings with aliases/names for Mercurial."""
+
     friendly_name = 'Mercurial'
     control_field = 'Vcs-Hg'
     create_command = 'hg clone --noupdate {remote} {local}'
@@ -1418,6 +1429,9 @@ class GitRepo(Repository):
 
     .. _Git: http://git-scm.com/
     """
+
+    ALIASES = ['git']
+    """A list of strings with aliases/names for Git."""
 
     friendly_name = 'Git'
     control_field = 'Vcs-Git'
@@ -1584,6 +1598,9 @@ class BzrRepo(Repository):
 
     .. _Bazaar: http://bazaar.canonical.com/en/
     """
+
+    ALIASES = ['bzr', 'bazaar']
+    """A list of strings with aliases/names for Bazaar."""
 
     friendly_name = 'Bazaar'
     control_field = 'Vcs-Bzr'
