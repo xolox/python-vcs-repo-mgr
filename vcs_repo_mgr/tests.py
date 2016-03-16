@@ -348,8 +348,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         logger.info("Testing checkout() support ..")
         try:
             repository.checkout(clean=True)
-        except NotImplementedError:
-            logger.warning("checkout() not supported for %s repositories ..", repository.friendly_name)
+        except NotImplementedError as e:
+            logger.warning("%s", e)
         else:
             assert repository.is_clean, "Expected working tree to be clean?!"
             # Make sure the repository has some tags.
@@ -379,8 +379,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                 )
             # Make sure the working tree is clean again.
             assert repository.is_clean
-        except NotImplementedError:
-            logger.warning("commit() not supported for %s repositories ..", repository.friendly_name)
+        except NotImplementedError as e:
+            logger.warning("%s", e)
 
     def check_branch_support(self, repository):
         """Make sure we can create new branches."""
@@ -410,8 +410,29 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             assert repository.is_clean
             # Make sure the new branch has been created.
             assert branch_name in repository.branches
-        except NotImplementedError:
-            logger.warning("create_branch() not supported for %s repositories ..", repository.friendly_name)
+            # Since we just went through the effort of creating a new branch
+            # and committing a change to that branch, we now have all the
+            # preconditions we need to check merge support (yes this is a
+            # kludge that should be refactored at some point).
+            self.check_merge_support(repository, branch_name, repository.default_revision)
+        except NotImplementedError as e:
+            logger.warning("%s", e)
+
+    def check_merge_support(self, repository, source_branch, target_branch):
+        """Make sure we can create new branches."""
+        logger.info("Testing merge() support ..")
+        try:
+            with EnsureNewCommit(repository, branch_name=target_branch):
+                repository.checkout(target_branch)
+                assert repository.is_clean
+                repository.merge(source_branch)
+                assert not repository.is_clean
+                repository.commit(
+                    author="Peter Odding <vcs-repo-mgr@peterodding.com>",
+                    message="This is a merge test",
+                )
+        except NotImplementedError as e:
+            logger.warning("%s", e)
 
     def mutate_working_tree(self, repository):
         """Mutate an arbitrary tracked file in the repository's working tree."""
@@ -598,8 +619,9 @@ class EnsureNewCommit(object):
 
     def __exit__(self, exc_type=None, exc_value=None, traceback=None):
         """Make sure a new commit was introduced since :func:`__enter__()`."""
-        new_id = self.repository.find_revision_id(revision=self.branch_name)
-        assert new_id != self.old_id
+        if exc_type is None:
+            new_id = self.repository.find_revision_id(revision=self.branch_name)
+            assert new_id != self.old_id
 
 
 def call(*arguments):

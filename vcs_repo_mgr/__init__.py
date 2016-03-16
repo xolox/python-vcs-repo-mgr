@@ -40,17 +40,40 @@ should help you get started:
 Common operations
 =================
 
-The following table lists common repository operations supported by
-`vcs-repo-mgr` and their equivalent Bazaar, Git and Mercurial commands:
+The operations supported by Bazaar, Git and Mercurial have confusingly similar
+names *except when they don't* (don't even get me started about subtly
+different semantics ;-) and so one challenge while developing `vcs-repo-mgr`
+has been to come up with good names that adequately capture the semantics of
+operations (just for the record: I'm not claiming that I always succeed on the
+first try :-).
 
-=============================  =================  ============  =========
-vcs-repo-mgr                   Bazaar             Git           Mercurial
-=============================  =================  ============  =========
-:func:`Repository.create()`    bzr branch         git clone     hg clone
-:func:`Repository.update()`    bzr pull           git fetch     hg pull
-:func:`Repository.checkout()`  (not implemented)  git checkout  hg update
-:func:`Repository.commit()`    (not implemented)  git commit    hg commit
-=============================  =================  ============  =========
+In case you find yourself as confused as I have found myself at times, the
+following table lists common repository operations supported by `vcs-repo-mgr`
+and their equivalent Bazaar, Git and Mercurial commands:
+
+==================================  =================  =====================  =========
+Python API (`vcs-repo-mgr`)         Bazaar             Git                    Mercurial
+==================================  =================  =====================  =========
+:func:`Repository.create()`         bzr branch         git clone              hg clone
+:func:`Repository.update()`         bzr pull           git fetch              hg pull
+:func:`Repository.checkout()`       (not implemented)  git checkout           hg update
+:func:`Repository.commit()`         (not implemented)  git commit             hg commit
+:func:`Repository.create_branch()`  (not implemented)  git checkout -b        hg branch
+:func:`Repository.merge()`          (not implemented)  git merge --no-commit  hg merge
+==================================  =================  =====================  =========
+
+.. note:: As you can see from the table above I'm slowly but surely forgetting
+          about keeping Bazaar support up to par, if only because I don't like
+          the "lowest common denominator" approach where useful Git and
+          Mercurial features aren't exposed because there's no clear
+          alternative for Bazaar. Also I work a lot less with Bazaar which
+          means I'm lacking knowledge; keeping Bazaar support up to par at all
+          times drags down my progress significantly.
+
+          In contrast while there are of course a lot of small details that
+          differ between Git and Mercurial, I'm still convinced that it's
+          useful to hide these differences, because overall the two systems are
+          so similar that it seems worth it to me (so far :-).
 """
 
 # Standard library modules.
@@ -81,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.23.1'
+__version__ = '0.24'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -699,6 +722,25 @@ class Repository(PropertyManager):
             branch_name=branch_name,
         ))
 
+    def merge(self, revision=None):
+        """
+        Merge a revision into the current branch (without committing the result).
+
+        :param revision: The revision to merge in (a string, defaults to
+                         :attr:`default_revision`).
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        self.create()
+        revision = revision or self.default_revision
+        logger.info("Merging revision %s in %s ..", revision, self.local)
+        execute(self.get_command(
+            method_name='merge',
+            attribute_name='merge_command',
+            local=self.local,
+            revision=revision,
+        ))
+
     def commit(self, message, author=None):
         """
         Commit changes to tracked files in the working tree.
@@ -1212,6 +1254,7 @@ class HgRepo(Repository):
     checkout_command = 'hg update --repository {local} --rev {revision}'
     checkout_command_clean = 'hg update --repository {local} --rev {revision} --clean'
     create_branch_command = 'hg branch --repository {local} {branch_name}'
+    merge_command = 'hg merge --repository {local} --rev {revision}'
     commit_command = 'hg commit --repository {local} --user {author_name}" <"{author_email}">" --message {message}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
@@ -1348,6 +1391,7 @@ class GitRepo(Repository):
     checkout_command = 'cd {local} && git checkout {revision}'
     checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
     create_branch_command = 'cd {local} && git checkout -b {branch_name}'
+    merge_command = 'cd {local} && git merge --no-commit --no-ff {revision}'
     commit_command = compact('''
         cd {local} && git
             -c user.name={author_name}
