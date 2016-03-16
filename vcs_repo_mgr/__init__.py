@@ -81,7 +81,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.23'
+__version__ = '0.23.1'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -1411,9 +1411,26 @@ class GitRepo(Repository):
 
     @property
     def is_clean(self):
-        """:data:`True` if the working tree is clean, :data:`False` otherwise."""
+        """
+        :data:`True` if the working tree (and index) is clean, :data:`False` otherwise.
+
+        The implementation of :attr:`GitRepo.is_clean` checks whether ``git
+        diff`` reports any differences. This command has several variants:
+
+        1. ``git diff`` shows the difference between the index and working
+           tree.
+        2. ``git diff --cached`` shows the difference between the last commit
+           and index.
+        3. ``git diff HEAD`` shows the difference between the last commit and
+           working tree.
+
+        The implementation of :attr:`GitRepo.is_clean` uses the third command
+        (``git diff HEAD``) in an attempt to hide the existence of git's index
+        from callers that are trying to write code that works with Git and
+        Mercurial using the same Python API.
+        """
         self.create()
-        listing = execute('git', 'diff', capture=True, directory=self.local)
+        listing = execute('git', 'diff', 'HEAD', capture=True, directory=self.local)
         return len(listing.splitlines()) == 0
 
     def find_revision_number(self, revision=None):
