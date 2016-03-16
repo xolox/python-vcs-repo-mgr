@@ -403,6 +403,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                 repository.commit(message="This is a test")
             # Make sure the working tree is clean again.
             assert repository.is_clean
+            # Make sure we are on the expected branch.
+            assert repository.current_branch == branch_name
             # Make sure the new branch has been created.
             assert branch_name in repository.branches
             # Since we just went through the effort of creating a new branch

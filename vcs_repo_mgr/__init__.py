@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.26.1'
+__version__ = '0.27'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -632,6 +632,15 @@ class Repository(PropertyManager):
         The :attr:`default_revision` property needs to be implemented by
         subclasses and/or passed to :func:`__init__()` as a keyword argument.
         """
+
+    @property
+    def current_branch(self):
+        """
+        The name of the branch that's currently checked out in the working tree (a string or :data:`None`).
+
+        The :attr:`current_branch` property needs to be implemented by subclasses.
+        """
+        raise NotImplementedError()
 
     @property
     def exists(self):
@@ -1430,6 +1439,11 @@ class HgRepo(Repository):
         return 'default'
 
     @property
+    def current_branch(self):
+        """The name of the branch that's currently checked out in the working tree (a string or :data:`None`)."""
+        return execute('hg', '-R', self.local, 'branch', capture=True, check=False, directory=self.local)
+
+    @property
     def is_bare(self):
         """
         :data:`True` if the repository is a bare checkout, :data:`False` otherwise.
@@ -1596,6 +1610,12 @@ class GitRepo(Repository):
     def default_revision(self):
         """The default revision for Git repositories (a string, defaults to ``master``)."""
         return 'master'
+
+    @property
+    def current_branch(self):
+        """The name of the branch that's currently checked out in the working tree (a string or :data:`None`)."""
+        output = execute('git', 'rev-parse', '--abbrev-ref', 'HEAD', capture=True, check=False, directory=self.local)
+        return output if output != 'HEAD' else None
 
     @property
     def is_bare(self):
