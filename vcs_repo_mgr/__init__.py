@@ -360,6 +360,37 @@ class Repository(PropertyManager):
     correct :class:`Repository` subclass.
     """
 
+    @staticmethod
+    def get_vcs_directory(directory):
+        """
+        Get the pathname of the directory containing the VCS metadata files.
+
+        :param directory: The pathname of a local directory (a string). The
+                          directory doesn't have to exist.
+        :returns: A subdirectory of the given directory or the directory itself
+                  (a string).
+
+        This static method needs to be implemented by :class:`Repository`
+        subclasses.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def contains_repository(cls, directory):
+        """
+        Check whether the given directory contains a local clone.
+
+        :param directory: The pathname of a local directory (a string).
+        :returns: :data:`True` if it looks like the directory contains a local
+                  clone, :data:`False` otherwise.
+
+        By default :func:`contains_repository()` just checks whether the result
+        of :func:`get_vcs_directory()` points to an existing local directory.
+        :class:`Repository` subclasses can override this class method to
+        improve detection accuracy.
+        """
+        return os.path.isdir(cls.get_vcs_directory(directory))
+
     def __init__(self, local=None, remote=None, bare=None, release_scheme=None, release_filter=None, **kw):
         """
         Initialize a version control repository interface.
@@ -557,12 +588,8 @@ class Repository(PropertyManager):
 
     @required_property
     def vcs_directory(self):
-        """
-        The pathname of the directory containing the local clone's VCS files (a string).
-
-        The :attr:`vcs_directory` property needs to be implemented by
-        subclasses and/or passed to :func:`__init__()` as a keyword argument.
-        """
+        """The pathname of the directory containing the local clone's VCS files (a string)."""
+        return self.get_vcs_directory(self.local)
 
     @required_property
     def default_revision(self):
@@ -576,7 +603,7 @@ class Repository(PropertyManager):
     @property
     def exists(self):
         """:data:`True` if the local clone exists, :data:`False` otherwise."""
-        raise NotImplementedError()
+        return self.contains_repository(self.local)
 
     @property
     def last_updated_file(self):
@@ -1305,6 +1332,17 @@ class HgRepo(Repository):
     commit_command = 'hg commit --repository {local} --user {author_name}" <"{author_email}">" --message {message}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
+    @staticmethod
+    def get_vcs_directory(directory):
+        """
+        Get the pathname of the directory containing Mercurial's metadata files.
+
+        :param directory: The pathname of a local directory (a string). The
+                          directory doesn't have to exist.
+        :returns: The ``.hg`` subdirectory of the given directory (a string).
+        """
+        return os.path.join(directory, '.hg')
+
     @writable_property(cached=True)
     def author(self):
         """
@@ -1322,19 +1360,9 @@ class HgRepo(Repository):
         )
 
     @required_property
-    def vcs_directory(self):
-        """The pathname of the ``.hg`` directory (a string)."""
-        return os.path.join(self.local, '.hg')
-
-    @required_property
     def default_revision(self):
         """The default revision for Mercurial repositories (a string, defaults to ``default``)."""
         return 'default'
-
-    @property
-    def exists(self):
-        """:data:`True` if the repository already exists, :data:`False` otherwise."""
-        return os.path.isdir(self.vcs_directory)
 
     @property
     def is_bare(self):
@@ -1455,6 +1483,34 @@ class GitRepo(Repository):
     ''')
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
 
+    @staticmethod
+    def get_vcs_directory(directory):
+        """
+        Get the pathname of the directory containing Git's metadata files.
+
+        :param directory: The pathname of a local directory (a string). The
+                          directory doesn't have to exist.
+        :returns: The ``.git`` subdirectory of the given directory (for
+                  repositories with a working tree) or the given directory
+                  itself (for repositories without a working tree).
+        """
+        subdirectory = os.path.join(directory, '.git')
+        return subdirectory if os.path.isdir(subdirectory) else directory
+
+    @classmethod
+    def contains_repository(cls, directory):
+        """
+        Check whether the given directory contains a local Git clone.
+
+        :param directory: The pathname of a local directory (a string).
+        :returns: :data:`True` if it looks like the directory contains a local
+                  Git clone, :data:`False` otherwise.
+
+        This static method checks whether the directory returned by
+        :func:`get_vcs_directory()` contains a file called ``config``.
+        """
+        return os.path.isfile(os.path.join(cls.get_vcs_directory(directory), 'config'))
+
     @writable_property(cached=True)
     def author(self):
         """
@@ -1471,28 +1527,9 @@ class GitRepo(Repository):
         return u"%s <%s>" % (name, email) if name and email else name
 
     @required_property
-    def vcs_directory(self):
-        """
-        The pathname of the ``.git`` directory (a string).
-
-        .. note:: If a ``.git`` directory is not found then the base directory
-                  of the repository is returned in the assumption that we're
-                  dealing with a bare repository clone (because bare repository
-                  clones don't contain a ``.git`` directory, unlike Mercurial
-                  repositories without a working copy).
-        """
-        directory = os.path.join(self.local, '.git')
-        return directory if os.path.isdir(directory) else self.local
-
-    @required_property
     def default_revision(self):
         """The default revision for Git repositories (a string, defaults to ``master``)."""
         return 'master'
-
-    @property
-    def exists(self):
-        """:data:`True` if the repository already exists, :data:`False` otherwise."""
-        return os.path.isfile(os.path.join(self.vcs_directory, 'config'))
 
     @property
     def is_bare(self):
@@ -1609,20 +1646,35 @@ class BzrRepo(Repository):
     update_command = 'cd {local} && bzr pull {remote}'
     export_command = 'cd {local} && bzr export --revision={revision} {directory}'
 
-    @required_property
-    def vcs_directory(self):
-        """The pathname of the ``.bzr`` directory (a string)."""
-        return os.path.join(self.local, '.bzr')
+    @staticmethod
+    def get_vcs_directory(directory):
+        """
+        Get the pathname of the directory containing Bazaar's metadata files.
+
+        :param directory: The pathname of a local directory (a string). The
+                          directory doesn't have to exist.
+        :returns: The ``.bzr`` subdirectory of the given directory (a string).
+        """
+        return os.path.join(directory, '.bzr')
+
+    @classmethod
+    def contains_repository(cls, directory):
+        """
+        Check whether the given directory contains a local Bazaar clone.
+
+        :param directory: The pathname of a local directory (a string).
+        :returns: :data:`True` if it looks like the directory contains a local
+                  Bazaar clone, :data:`False` otherwise.
+
+        This method checks whether the directory returned by
+        :func:`get_vcs_directory()` contains a file called ``branch-format``.
+        """
+        return os.path.isfile(os.path.join(cls.get_vcs_directory(directory), 'branch-format'))
 
     @required_property
     def default_revision(self):
         """The default revision for Bazaar repositories (a string, defaults to ``last:1``)."""
         return 'last:1'
-
-    @property
-    def exists(self):
-        """:data:`True` if the repository already exists, :data:`False` otherwise."""
-        return os.path.isfile(os.path.join(self.vcs_directory, 'branch-format'))
 
     @property
     def is_bare(self):
