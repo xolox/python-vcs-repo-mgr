@@ -81,7 +81,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.20.1'
+__version__ = '0.21'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -563,10 +563,12 @@ class Repository(PropertyManager):
         with open(self.last_updated_file, 'w') as handle:
             handle.write('%i\n' % time.time())
 
-    def create(self):
+    def create(self, remote=None):
         """
         Create the local clone of the remote version control repository.
 
+        :param remote: Overrides the value of :attr:`remote` for the duration
+                       of the call to :func:`create()`.
         :returns: :data:`True` if the repository was just created,
                   :data:`False` if it already existed.
 
@@ -575,29 +577,34 @@ class Repository(PropertyManager):
         if self.exists:
             return False
         else:
+            remote = remote or self.remote
             logger.info("Creating %s clone of %s at %s ..",
-                        self.friendly_name, self.remote, self.local)
+                        self.friendly_name, remote, self.local)
             template = self.create_command if self.bare else self.create_command_non_bare
             execute(template.format(
                 local=pipes.quote(self.local),
-                remote=pipes.quote(self.remote),
+                remote=pipes.quote(remote),
             ))
             self.mark_updated()
             return True
 
-    def update(self):
+    def update(self, remote=None):
         """
         Update the local clone of the remote version control repository.
+
+        :param remote: Overrides the value of :attr:`remote` for the duration
+                       of the call to :func:`update()`.
 
         If used in combination with :class:`limit_vcs_updates` this won't
         perform redundant updates.
 
         .. note:: Automatically creates the local repository on the first run.
         """
-        if not self.remote:
+        remote = remote or self.remote
+        if not remote:
             # If there is no remote configured, there's nothing we can do!
             return
-        if self.create():
+        if self.create(remote=remote):
             # If the local clone didn't exist yet and we just created it,
             # we can skip the update (since there's no point).
             return
@@ -606,10 +613,10 @@ class Repository(PropertyManager):
             # If an update limit has been enforced we also skip the update.
             return
         logger.info("Updating %s clone of %s at %s ..",
-                    self.friendly_name, self.remote, self.local)
+                    self.friendly_name, remote, self.local)
         execute(self.update_command.format(
             local=pipes.quote(self.local),
-            remote=pipes.quote(self.remote),
+            remote=pipes.quote(remote),
         ))
         self.mark_updated()
 
