@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.26'
+__version__ = '0.26.1'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -1385,17 +1385,17 @@ class HgRepo(Repository):
     control_field = 'Vcs-Hg'
     create_command = 'hg clone --noupdate {remote} {local}'
     create_command_non_bare = 'hg clone {remote} {local}'
-    update_command = 'hg pull --repository={local} {remote}'
-    checkout_command = 'hg update --repository={local} --rev={revision}'
-    checkout_command_clean = 'hg update --repository={local} --rev={revision} --clean'
-    create_branch_command = 'hg branch --repository={local} {branch_name}'
+    update_command = 'hg -R {local} pull {remote}'
+    checkout_command = 'hg -R {local} update --rev={revision}'
+    checkout_command_clean = 'hg -R {local} update --rev={revision} --clean'
+    create_branch_command = 'hg -R {local} branch {branch_name}'
     delete_branch_command = compact('''
-        hg update --repository={local} --rev={branch_name} &&
-        hg commit --repository={local} --user={author_combined} --message={message} --close-branch
+        hg -R {local} update --rev={branch_name} &&
+        hg -R {local} commit --user={author_combined} --message={message} --close-branch
     ''')
-    merge_command = 'hg merge --repository={local} --rev={revision}'
-    commit_command = 'hg commit --repository={local} --user={author_combined} --message={message}'
-    export_command = 'hg archive --repository={local} --rev={revision} {directory}'
+    merge_command = 'hg -R {local} merge --rev={revision}'
+    commit_command = 'hg -R {local} commit --user={author_combined} --message={message}'
+    export_command = 'hg -R {local} archive --rev={revision} {directory}'
 
     @staticmethod
     def get_vcs_directory(directory):
@@ -1420,7 +1420,7 @@ class HgRepo(Repository):
         for :attr:`author`.
         """
         return execute(
-            'hg', '--repository', self.local, 'config', 'ui.username',
+            'hg', '-R', self.local, 'config', 'ui.username',
             capture=True, check=False, silent=True,
         )
 
@@ -1439,7 +1439,7 @@ class HgRepo(Repository):
         """
         self.create()
         try:
-            return int(execute('hg', 'id', capture=True, directory=self.local)) == 0
+            return int(execute('hg', '-R', self.local, 'id', capture=True)) == 0
         except Exception:
             return False
 
@@ -1447,7 +1447,7 @@ class HgRepo(Repository):
     def is_clean(self):
         """:data:`True` if the working tree is clean, :data:`False` otherwise."""
         self.create()
-        listing = execute('hg', 'diff', capture=True, directory=self.local)
+        listing = execute('hg', '-R', self.local, 'diff', capture=True)
         return len(listing.splitlines()) == 0
 
     def find_revision_number(self, revision=None):
@@ -1459,7 +1459,7 @@ class HgRepo(Repository):
         """
         self.create()
         revision = revision or self.default_revision
-        result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--num',
+        result = execute('hg', '-R', self.local, 'id', '--rev', revision, '--num',
                          capture=True).rstrip('+')
         assert result and result.isdigit(), \
             "Failed to find local revision number! ('hg id --num' gave unexpected output)"
@@ -1474,7 +1474,7 @@ class HgRepo(Repository):
         """
         self.create()
         revision = revision or self.default_revision
-        result = execute('hg', '--repository', self.local, 'id', '--rev', revision, '--debug', '--id',
+        result = execute('hg', '-R', self.local, 'id', '--rev', revision, '--debug', '--id',
                          capture=True).rstrip('+')
         assert re.match('^[A-Fa-z0-9]+$', result), \
             "Failed to find global revision id! ('hg id --id' gave unexpected output)"
@@ -1488,7 +1488,7 @@ class HgRepo(Repository):
 
         .. note:: Closed branches are not included.
         """
-        listing = execute('hg', '--repository', self.local, 'branches', capture=True)
+        listing = execute('hg', '-R', self.local, 'branches', capture=True)
         for line in listing.splitlines():
             tokens = line.split()
             if len(tokens) >= 2 and ':' in tokens[1]:
@@ -1504,7 +1504,7 @@ class HgRepo(Repository):
 
         :returns: A generator of :class:`Revision` objects.
         """
-        listing = execute('hg', '--repository', self.local, 'tags', capture=True)
+        listing = execute('hg', '-R', self.local, 'tags', capture=True)
         for line in listing.splitlines():
             tokens = line.split()
             if len(tokens) >= 2 and ':' in tokens[1]:
