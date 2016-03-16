@@ -66,7 +66,7 @@ import time
 from executor import execute, quote
 from humanfriendly import coerce_boolean, compact, concatenate, format, format_path, parse_path
 from natsort import natsort, natsort_key
-from property_manager import PropertyManager, required_property, writable_property
+from property_manager import PropertyManager, lazy_property, required_property, writable_property
 from six import string_types
 from six.moves import configparser
 from six.moves import urllib_parse as urlparse
@@ -1094,16 +1094,15 @@ class Revision(object):
         """
         self.repository = repository
         self.revision_id = revision_id
-        self._revision_number = revision_number
+        if revision_number is not None:
+            self.revision_number = revision_number
         self.branch = branch
         self.tag = tag
 
-    @property
+    @lazy_property(writable=True)
     def revision_number(self):
         """The revision number of the revision (an integer)."""
-        if self._revision_number is None:
-            self._revision_number = self.repository.find_revision_number(self.revision_id)
-        return self._revision_number
+        return self.repository.find_revision_number(self.revision_id)
 
     def __repr__(self):
         """Generate a human readable representation of a revision object."""
@@ -1112,8 +1111,8 @@ class Revision(object):
             fields.append("branch=%r" % self.branch)
         if self.tag:
             fields.append("tag=%r" % self.tag)
-        if self._revision_number is not None:
-            fields.append("revision_number=%r" % self._revision_number)
+        if self.revision_number is not None:
+            fields.append("revision_number=%r" % self.revision_number)
         fields.append("revision_id=%r" % self.revision_id)
         return "%s(%s)" % (self.__class__.__name__, ', '.join(fields))
 
