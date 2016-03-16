@@ -315,6 +315,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # TODO Cloning of repository objects might deserve being a feature?
         kw = dict((n, getattr(source_repo, n)) for n in ('release_scheme', 'release_filter', 'default_revision'))
         cloned_repo = source_repo.__class__(
+            author="Peter Odding <vcs-repo-mgr@peterodding.com>",
             local=create_temporary_directory(),
             remote=source_repo.local,
             bare=False, **kw
@@ -373,10 +374,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             # Commit the change we made and ensure that commit() actually
             # creates a new revision in the relevant branch.
             with EnsureNewCommit(repository):
-                repository.commit(
-                    author="Peter Odding <vcs-repo-mgr@peterodding.com>",
-                    message="This is a test",
-                )
+                repository.commit(message="This is a test")
             # Make sure the working tree is clean again.
             assert repository.is_clean
         except NotImplementedError as e:
@@ -402,10 +400,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             # Commit the change we made and ensure that commit() actually
             # creates a new revision in the relevant branch.
             with EnsureNewCommit(repository, branch_name=branch_name):
-                repository.commit(
-                    author="Peter Odding <vcs-repo-mgr@peterodding.com>",
-                    message="This is a test",
-                )
+                repository.commit(message="This is a test")
             # Make sure the working tree is clean again.
             assert repository.is_clean
             # Make sure the new branch has been created.
@@ -427,10 +422,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                 assert repository.is_clean
                 repository.merge(source_branch)
                 assert not repository.is_clean
-                repository.commit(
-                    author="Peter Odding <vcs-repo-mgr@peterodding.com>",
-                    message="This is a merge test",
-                )
+                repository.commit(message="This is a merge test")
         except NotImplementedError as e:
             logger.warning("%s", e)
 

@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.24'
+__version__ = '0.24.1'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -600,6 +600,28 @@ class Repository(PropertyManager):
         with open(self.last_updated_file, 'w') as handle:
             handle.write('%i\n' % time.time())
 
+    def get_author(self, author=None):
+        """
+        Get the name and email address of the author for commits.
+
+        :param author: Override the value of :attr:`author` (a string). If
+                       :attr:`author` is :data:`None` this argument is
+                       required.
+        :returns: A dictionary with the keys 'author_name' and 'author_email'
+                 and string values.
+        :raises: :exc:`~exceptions.ValueError` when no author information is
+                 available or the author information is in the wrong format.
+        """
+        author = author or self.author
+        if not author:
+            raise ValueError("You need to specify an author!")
+        match = re.match('^(.+?) <(.+?)>$', author)
+        if not match:
+            msg = "The provided author information (%s) isn't in the 'name <email>' format!"
+            raise ValueError(msg % author)
+        return dict(author_name=match.group(1),
+                    author_email=match.group(2))
+
     def get_command(self, method_name, attribute_name, **kw):
         """
         Get the command for a given VCS operation.
@@ -739,6 +761,7 @@ class Repository(PropertyManager):
             attribute_name='merge_command',
             local=self.local,
             revision=revision,
+            **self.get_author()
         ))
 
     def commit(self, message, author=None):
@@ -753,23 +776,13 @@ class Repository(PropertyManager):
         .. note:: Automatically creates the local repository on the first run.
         """
         self.create()
-        author = author or self.author
-        if not author:
-            raise ValueError("You need to specify an author for your commit!")
-        match = re.match('^(.+?) <(.+?)>$', author)
-        if not match:
-            msg = "The given author (%s) isn't in the 'name <email>' format!"
-            raise ValueError(msg % author)
-        author_name = match.group(1)
-        author_email = match.group(2)
         logger.info("Committing changes in working tree of %s: %s", self.local, message)
         execute(self.get_command(
             method_name='commit',
             attribute_name='commit_command',
             local=self.local,
-            author_name=author_name,
-            author_email=author_email,
             message=message,
+            **self.get_author(author)
         ))
 
     def export(self, directory, revision=None):
@@ -1391,7 +1404,12 @@ class GitRepo(Repository):
     checkout_command = 'cd {local} && git checkout {revision}'
     checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
     create_branch_command = 'cd {local} && git checkout -b {branch_name}'
-    merge_command = 'cd {local} && git merge --no-commit --no-ff {revision}'
+    merge_command = compact('''
+        cd {local} && git
+            -c user.name={author_name}
+            -c user.email={author_email}
+            merge --no-commit --no-ff {revision}
+    ''')
     commit_command = compact('''
         cd {local} && git
             -c user.name={author_name}
