@@ -57,13 +57,12 @@ import functools
 import logging
 import operator
 import os
-import pipes
 import re
 import tempfile
 import time
 
 # External dependencies.
-from executor import execute
+from executor import execute, quote
 from humanfriendly import coerce_boolean, compact, concatenate, format, format_path, parse_path
 from natsort import natsort, natsort_key
 from property_manager import PropertyManager, required_property, writable_property
@@ -563,6 +562,28 @@ class Repository(PropertyManager):
         with open(self.last_updated_file, 'w') as handle:
             handle.write('%i\n' % time.time())
 
+    def get_command(self, method_name, attribute_name, **kw):
+        """
+        Get the command for a given VCS operation.
+
+        :param method_name: The name of the method that wants to execute the
+                            command (a string).
+        :param attribute_name: The name of the attribute that is expected to
+                               hold the VCS command (a string).
+        :param kw: Any keyword arguments are shell escaped and interpolated
+                   into the VCS command.
+        :returns: The VCS command (a string).
+        :raises: :exc:`~exceptions.NotImplementedError` when the requested
+                 attribute isn't available (e.g. because the VCS operation
+                 isn't supported).
+        """
+        command_template = getattr(self, attribute_name, None)
+        if command_template is None:
+            msg = "Repository.%s() not supported for %s repositories!"
+            raise NotImplementedError(msg % (method_name, self.friendly_name))
+        quoted_arguments = dict((k, quote(v)) for k, v in kw.items())
+        return command_template.format(**quoted_arguments)
+
     def create(self, remote=None):
         """
         Create the local clone of the remote version control repository.
@@ -578,12 +599,12 @@ class Repository(PropertyManager):
             return False
         else:
             remote = remote or self.remote
-            logger.info("Creating %s clone of %s at %s ..",
-                        self.friendly_name, remote, self.local)
-            template = self.create_command if self.bare else self.create_command_non_bare
-            execute(template.format(
-                local=pipes.quote(self.local),
-                remote=pipes.quote(remote),
+            logger.info("Creating %s clone of %s at %s ..", self.friendly_name, remote, self.local)
+            execute(self.get_command(
+                method_name='create',
+                attribute_name='create_command' if self.bare else 'create_command_non_bare',
+                local=self.local,
+                remote=remote,
             ))
             self.mark_updated()
             return True
@@ -612,11 +633,12 @@ class Repository(PropertyManager):
         if global_last_update and self.last_updated >= global_last_update:
             # If an update limit has been enforced we also skip the update.
             return
-        logger.info("Updating %s clone of %s at %s ..",
-                    self.friendly_name, remote, self.local)
-        execute(self.update_command.format(
-            local=pipes.quote(self.local),
-            remote=pipes.quote(remote),
+        logger.info("Updating %s clone of %s at %s ..", self.friendly_name, remote, self.local)
+        execute(self.get_command(
+            method_name='update',
+            attribute_name='update_command',
+            local=self.local,
+            remote=remote,
         ))
         self.mark_updated()
 
@@ -633,14 +655,12 @@ class Repository(PropertyManager):
         """
         self.create()
         revision = revision or self.default_revision
-        attribute_name = 'checkout_command_clean' if clean else 'checkout_command'
-        command_template = getattr(self, attribute_name, None)
-        if not command_template:
-            raise NotImplementedError("Repository.checkout() not supported for %s repositories!" % self.friendly_name)
         logger.info("Checking out revision %s in %s ..", revision, self.local)
-        execute(command_template.format(
-            local=pipes.quote(self.local),
-            revision=pipes.quote(revision),
+        execute(self.get_command(
+            method_name='checkout',
+            attribute_name='checkout_command_clean' if clean else 'checkout_command',
+            local=self.local,
+            revision=revision,
         ))
 
     def export(self, directory, revision=None):
@@ -659,10 +679,12 @@ class Repository(PropertyManager):
         logger.info("Exporting revision %s of %s to %s ..", revision, self.local, directory)
         if not os.path.isdir(directory):
             os.makedirs(directory)
-        execute(self.export_command.format(
-            local=pipes.quote(self.local),
-            revision=pipes.quote(revision),
-            directory=pipes.quote(directory),
+        execute(self.get_command(
+            method_name='export',
+            attribute_name='export_command',
+            local=self.local,
+            revision=revision,
+            directory=directory,
         ))
 
     @property
