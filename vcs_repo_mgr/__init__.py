@@ -81,7 +81,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.22.1'
+__version__ = '0.22.2'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -502,8 +502,13 @@ class Repository(PropertyManager):
         """
         The author for commits created using :func:`commit()` (a string).
 
-        Subclasses are expected to override this property to default to the
-        author configured in the version control system.
+        This is a string of the form ``name <email>`` where both the name and
+        the email address are required (this is actually a slight
+        simplification, but I digress).
+
+        The :attr:`author` property needs to be provided by subclasses and/or
+        the caller (by passing it to :func:`__init__()` as a keyword
+        argument).
         """
 
     @required_property

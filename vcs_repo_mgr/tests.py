@@ -382,7 +382,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             assert not cloned_repo.is_clean
             # Commit the change we made.
             cloned_repo.commit(
-                author="vcs-repo-mgr",
+                author="Peter Odding <vcs-repo-mgr@peterodding.com>",
                 message="This is a test",
             )
             # Make sure the working tree is clean again.
