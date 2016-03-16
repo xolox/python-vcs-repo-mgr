@@ -410,6 +410,10 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             # preconditions we need to check merge support (yes this is a
             # kludge that should be refactored at some point).
             self.check_merge_support(repository, branch_name, repository.default_revision)
+            # Delete the branch we just created.
+            repository.delete_branch(branch_name)
+            # Make sure the new branch has been deleted.
+            assert branch_name not in repository.branches
         except NotImplementedError as e:
             logger.warning("%s", e)
 

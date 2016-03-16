@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.25'
+__version__ = '0.26'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -690,8 +690,13 @@ class Repository(PropertyManager):
         if not match:
             msg = "The provided author information (%s) isn't in the 'name <email>' format!"
             raise ValueError(msg % author)
-        return dict(author_name=match.group(1),
-                    author_email=match.group(2))
+        name = match.group(1)
+        email = match.group(2)
+        return dict(
+            author_name=name,
+            author_email=email,
+            author_combined=u"%s <%s>" % (name, email),
+        )
 
     def get_command(self, method_name, attribute_name, **kw):
         """
@@ -813,6 +818,29 @@ class Repository(PropertyManager):
             attribute_name='create_branch_command',
             local=self.local,
             branch_name=branch_name,
+        ))
+
+    def delete_branch(self, branch_name, message=None):
+        """
+        Delete (or close) a branch in the local repository clone.
+
+        :param branch_name: The name of the branch to delete (a string).
+        :param message: The message to use when closing the branch requires a
+                        commit (a string or :data:`None`). Defaults to "Closing
+                        branch NAME".
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        self.create()
+        logger.info("Deleting branch %s in %s ..", branch_name, self.local)
+        message = message or ("Closing branch %s" % branch_name)
+        execute(self.get_command(
+            method_name='delete_branch',
+            attribute_name='delete_branch_command',
+            local=self.local,
+            branch_name=branch_name,
+            message=message,
+            **self.get_author()
         ))
 
     def merge(self, revision=None):
@@ -1357,13 +1385,17 @@ class HgRepo(Repository):
     control_field = 'Vcs-Hg'
     create_command = 'hg clone --noupdate {remote} {local}'
     create_command_non_bare = 'hg clone {remote} {local}'
-    update_command = 'hg pull --repository {local} {remote}'
-    checkout_command = 'hg update --repository {local} --rev {revision}'
-    checkout_command_clean = 'hg update --repository {local} --rev {revision} --clean'
-    create_branch_command = 'hg branch --repository {local} {branch_name}'
-    merge_command = 'hg merge --repository {local} --rev {revision}'
-    commit_command = 'hg commit --repository {local} --user {author_name}" <"{author_email}">" --message {message}'
-    export_command = 'hg archive --repository {local} --rev {revision} {directory}'
+    update_command = 'hg pull --repository={local} {remote}'
+    checkout_command = 'hg update --repository={local} --rev={revision}'
+    checkout_command_clean = 'hg update --repository={local} --rev={revision} --clean'
+    create_branch_command = 'hg branch --repository={local} {branch_name}'
+    delete_branch_command = compact('''
+        hg update --repository={local} --rev={branch_name} &&
+        hg commit --repository={local} --user={author_combined} --message={message} --close-branch
+    ''')
+    merge_command = 'hg merge --repository={local} --rev={revision}'
+    commit_command = 'hg commit --repository={local} --user={author_combined} --message={message}'
+    export_command = 'hg archive --repository={local} --rev={revision} {directory}'
 
     @staticmethod
     def get_vcs_directory(directory):
@@ -1502,6 +1534,7 @@ class GitRepo(Repository):
     checkout_command = 'cd {local} && git checkout {revision}'
     checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
     create_branch_command = 'cd {local} && git checkout -b {branch_name}'
+    delete_branch_command = 'cd {local} && git branch -d {branch_name}'
     merge_command = compact('''
         cd {local} && git
             -c user.name={author_name}
