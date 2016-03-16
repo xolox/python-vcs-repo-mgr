@@ -81,7 +81,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.22'
+__version__ = '0.22.1'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -497,6 +497,15 @@ class Repository(PropertyManager):
             pattern = re.compile(pattern)
         return pattern
 
+    @writable_property
+    def author(self):
+        """
+        The author for commits created using :func:`commit()` (a string).
+
+        Subclasses are expected to override this property to default to the
+        author configured in the version control system.
+        """
+
     @required_property
     def friendly_name(self):
         """
@@ -664,20 +673,27 @@ class Repository(PropertyManager):
             revision=revision,
         ))
 
-    def commit(self, message):
+    def commit(self, message, author=None):
         """
         Commit changes to tracked files in the working tree.
 
         :param message: The commit message (a string).
+        :param author: Override the value of :attr:`author` (a string). If
+                       :attr:`author` is :data:`None` this argument is
+                       required.
 
         .. note:: Automatically creates the local repository on the first run.
         """
         self.create()
+        author = author or self.author
+        if not author:
+            raise ValueError("You need to specify an author for your commit!")
         logger.info("Committing changes in working tree of %s: %s", self.local, message)
         execute(self.get_command(
             method_name='commit',
             attribute_name='commit_command',
             local=self.local,
+            author=author,
             message=message,
         ))
 
@@ -1163,8 +1179,24 @@ class HgRepo(Repository):
     update_command = 'hg pull --repository {local} {remote}'
     checkout_command = 'hg update --repository {local} --rev {revision}'
     checkout_command_clean = 'hg update --repository {local} --rev {revision} --clean'
-    commit_command = 'hg commit --repository {local} --message {message}'
+    commit_command = 'hg commit --repository {local} --user {author} --message {message}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
+
+    @writable_property(cached=True)
+    def author(self):
+        """
+        The author for commits created using :func:`~Repository.commit()` (a string).
+
+        The :class:`HgRepo` class overrides this property to discover the
+        configured username and email address using the command ``hg config
+        ui.username``. This means that by default your Mercurial configuration
+        will be respected, but you are still free to explicitly specify a value
+        for :attr:`author`.
+        """
+        return execute(
+            'hg', '--repository', self.local, 'config', 'ui.username',
+            capture=True, check=False, silent=True,
+        )
 
     @required_property
     def vcs_directory(self):
@@ -1282,8 +1314,23 @@ class GitRepo(Repository):
     update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
     checkout_command = 'cd {local} && git checkout {revision}'
     checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
-    commit_command = 'cd {local} && git commit --all --message {message}'
+    commit_command = 'cd {local} && git commit --all --author {author} --message {message}'
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
+
+    @writable_property(cached=True)
+    def author(self):
+        """
+        The author for commits created using :func:`~Repository.commit()` (a string).
+
+        The :class:`GitRepo` class overrides this property to discover the
+        configured username using the command ``git config user.name`` and
+        email address using ``git config user.email``. This means that by
+        default your Git configuration will be respected, but you are still
+        free to explicitly specify a value for :attr:`author`.
+        """
+        name = execute('git', 'config', 'user.name', capture=True, check=False, directory=self.local, silent=True)
+        email = execute('git', 'config', 'user.email', capture=True, check=False, directory=self.local, silent=True)
+        return u"%s <%s>" % (name, email) if name and email else name
 
     @required_property
     def vcs_directory(self):
