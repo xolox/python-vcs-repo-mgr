@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.24.1'
+__version__ = '0.25'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -133,15 +133,40 @@ loaded_repositories = {}
 
 def coerce_repository(value):
     """
-    Convert a string (taken to be a repository name or URL) to a :class:`Repository` object.
+    Convert a string (taken to be a repository name or location) to a :class:`Repository` object.
 
-    :param value: The name or URL of a repository (a string or a
-                  :class:`Repository` object).
+    :param value: The name or location of a repository (a string) or a
+                  :class:`Repository` object.
     :returns: A :class:`Repository` object.
-    :raises: :exc:`~exceptions.ValueError` when the given ``value`` is not a
-             string or a :class:`Repository` object or if the value is a string but
+    :raises: :exc:`~exceptions.ValueError` when the given value is not a string
+             or a :class:`Repository` object or if the value is a string but
              doesn't match the name of any configured repository and also can't
-             be parsed as the location of a remote repository.
+             be parsed as the location of a repository.
+
+    The :func:`coerce_repository()` function creates :class:`Repository` objects:
+
+    1. If the value is already a :class:`Repository` object it is returned to
+       the caller untouched.
+    2. If the value is accepted by :func:`find_configured_repository()` then
+       the resulting :class:`Repository` object is returned.
+    3. If the value is a string that starts with a known VCS type prefix (e.g.
+       ``hg+https://bitbucket.org/ianb/virtualenv``) the prefix is removed from
+       the string and a :class:`Repository` object is returned:
+
+       - If the resulting string points to an existing local directory it will
+         be used to set :attr:`~Repository.local`.
+       - Otherwise the resulting string is used to set
+         :attr:`~Repository.remote`.
+    4. If the value is a string pointing to an existing local directory, the
+       VCS type is inferred from the directory's contents and a
+       :class:`Repository` object is returned whose :attr:`~Repository.local`
+       property is set to the local directory.
+    5. If the value is a string that ends with ``.git`` (a common idiom for git
+       repositories) a :class:`Repository` object is returned:
+
+       - If the value points to an existing local directory it will be used to
+         set :attr:`~Repository.local`.
+       - Otherwise the value is used to set :attr:`~Repository.remote`.
     """
     # Repository objects pass through untouched.
     if isinstance(value, Repository):
@@ -155,18 +180,23 @@ def coerce_repository(value):
         return find_configured_repository(value)
     except NoSuchRepositoryError:
         pass
-    # At this point we'll assume the string is the location of a remote
-    # repository. First lets see if the repository type is prefixed to the
-    # remote location with a `+' in between (pragmatic but ugly :-).
-    vcs_type, _, remote = value.partition('+')
-    if vcs_type and remote:
+    # Parse and try to resolve the VCS type prefix.
+    vcs_type, _, location = value.partition('+')
+    if vcs_type and location:
+        kw = {'local' if os.path.exists(location) else 'remote': location}
         try:
-            return repository_factory(vcs_type, remote=remote)
+            return repository_factory(vcs_type, **kw)
         except UnknownRepositoryTypeError:
             pass
-    # Check for remote locations that end with the suffix `.git' (fairly common).
+    # Try to infer the repository type of an existing local clone.
+    for cls in REPOSITORY_TYPES:
+        if cls.contains_repository(value):
+            return repository_factory(cls, local=value)
+    # Check for locations that end with `.git' (a common idiom for remote
+    # git repositories) even if the location isn't prefixed with `git+'.
     if value.endswith('.git'):
-        return repository_factory('git', remote=value)
+        kw = {'local' if os.path.exists(value) else 'remote': value}
+        return repository_factory(GitRepo, **kw)
     # If all else fails, at least give a clear explanation of the problem.
     msg = ("The string %r doesn't match the name of any configured repository"
            " and it also can't be parsed as the location of a remote"
