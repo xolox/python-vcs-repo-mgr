@@ -29,7 +29,7 @@ install:
 	$(ACTIVATE) && pip-accel install --quiet --editable .
 
 test: install
-	test -x "$(VIRTUAL_ENV)/bin/py.test" || ($(ACTIVATE) && pip-accel install --quiet pytest pytest-cov)
+	$(ACTIVATE) && pip-accel install --quiet pytest pytest-cov
 	$(ACTIVATE) && py.test --cov --exitfirst --verbose
 	$(ACTIVATE) && coverage html
 
