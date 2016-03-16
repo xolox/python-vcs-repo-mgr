@@ -14,8 +14,7 @@ default:
 	@echo 'Usage:'
 	@echo
 	@echo '    make install    install the package in a virtual environment'
-	@echo '    make test       run the test suite'
-	@echo '    make coverage   run the tests, report coverage'
+	@echo '    make test       run the test suite and report coverage'
 	@echo '    make check      check the coding style'
 	@echo '    make docs       update documentation using Sphinx'
 	@echo '    make publish    publish changes to GitHub/PyPI'
@@ -24,31 +23,26 @@ default:
 
 install:
 	test -d "$(VIRTUAL_ENV)" || virtualenv --no-site-packages "$(VIRTUAL_ENV)"
-	test -x "$(VIRTUAL_ENV)/bin/pip-accel" || ($(ACTIVATE) && easy_install pip-accel)
-	$(ACTIVATE) && pip-accel install -r requirements.txt
-	$(ACTIVATE) && pip uninstall -y vcs-repo-mgr || true
-	$(ACTIVATE) && pip-accel install -e .
+	test -x "$(VIRTUAL_ENV)/bin/pip" || ($(ACTIVATE) && easy_install pip)
+	test -x "$(VIRTUAL_ENV)/bin/pip-accel" || ($(ACTIVATE) && pip install --quiet pip-accel)
+	$(ACTIVATE) && pip uninstall --quiet --yes vcs-repo-mgr || true
+	$(ACTIVATE) && pip-accel install --quiet --editable .
 
 test: install
-	test -x "$(VIRTUAL_ENV)/bin/py.test" || ($(ACTIVATE) && pip-accel install pytest)
-	$(ACTIVATE) && py.test --exitfirst --capture=no vcs_repo_mgr/tests.py
-
-coverage: install
-	test -x "$(VIRTUAL_ENV)/bin/coverage" || ($(ACTIVATE) && pip-accel install coverage)
-	$(ACTIVATE) && coverage run --source=vcs_repo_mgr setup.py test
-	$(ACTIVATE) && coverage html --omit=vcs_repo_mgr/tests.py
-	if [ "`whoami`" != root ] && which gnome-open >/dev/null 2>&1; then gnome-open htmlcov/index.html; fi
+	test -x "$(VIRTUAL_ENV)/bin/py.test" || ($(ACTIVATE) && pip-accel install --quiet pytest pytest-cov)
+	$(ACTIVATE) && py.test --cov --exitfirst --verbose
+	$(ACTIVATE) && coverage html
 
 check: install
-	test -x "$(VIRTUAL_ENV)/bin/flake8" || ($(ACTIVATE) && pip-accel install flake8-pep257)
+	test -x "$(VIRTUAL_ENV)/bin/flake8" || ($(ACTIVATE) && pip-accel install --quiet flake8-pep257)
 	$(ACTIVATE) && flake8
 
 readme:
-	test -x "$(VIRTUAL_ENV)/bin/cog.py" || ($(ACTIVATE) && pip-accel install cogapp)
+	test -x "$(VIRTUAL_ENV)/bin/cog.py" || ($(ACTIVATE) && pip-accel install --quiet cogapp)
 	$(ACTIVATE) && cog.py -r README.rst
 
 docs: install
-	test -x "$(VIRTUAL_ENV)/bin/sphinx-build" || ($(ACTIVATE) && pip-accel install sphinx)
+	test -x "$(VIRTUAL_ENV)/bin/sphinx-build" || ($(ACTIVATE) && pip-accel install --quiet sphinx)
 	cd docs && make html
 
 publish:
@@ -58,4 +52,4 @@ publish:
 clean:
 	rm -Rf build dist docs/build *.egg-info htmlcov
 
-.PHONY: default install test docs publish clean
+.PHONY: default install test check readme docs publish clean

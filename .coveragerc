@@ -1,0 +1,11 @@
+# .coveragerc: Configuration file for coverage.py.
+# http://nedbatchelder.com/code/coverage/
+
+[run]
+source = vcs_repo_mgr
+omit = vcs_repo_mgr/tests.py
+
+[report]
+exclude_lines = raise NotImplementedError()
+
+# vim: ft=dosini

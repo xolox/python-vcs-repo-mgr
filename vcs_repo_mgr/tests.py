@@ -1,7 +1,7 @@
 """Automated tests for the `vcs-repo-mgr` package."""
 
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 15, 2016
+# Last Change: March 16, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 # Standard library modules.
@@ -208,6 +208,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         assert repository.exists, "Expected local Mercurial checkout to exist!"
         # Test HGRepo.is_bare on an existing repository.
         assert repository.is_bare, "Expected bare Mercurial checkout!"
+        # The virtualenv repository doesn't have a branch named `default' (it
+        # uses `trunk' instead) which breaks check_working_tree_support().
+        repository.default_revision = 'trunk'
         # Test working tree support.
         self.check_working_tree_support(repository)
         # Test HgRepo.update().
@@ -308,10 +311,12 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Make sure the source repository contains a bare checkout.
         assert source_repo.is_bare, "Expected a bare repository checkout!"
         # Create a clone of the repository that does have a working tree.
+        # TODO Cloning of repository objects might deserve being a feature?
+        kw = dict((n, getattr(source_repo, n)) for n in ('release_scheme', 'release_filter', 'default_revision'))
         cloned_repo = source_repo.__class__(
             local=create_temporary_directory(),
             remote=source_repo.local,
-            bare=False,
+            bare=False, **kw
         )
         # Make sure the clone doesn't exist yet.
         assert not cloned_repo.exists
@@ -333,6 +338,20 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         assert not cloned_repo.is_clean, "Expected working to be dirty?!"
         # Once the working tree is dirty this should raise the expected exception.
         self.assertRaises(WorkingTreeNotCleanError, cloned_repo.ensure_clean)
+        # Make sure that cleaning the working tree behaves as expected.
+        try:
+            cloned_repo.checkout(clean=True)
+        except NotImplementedError:
+            # The following tests are skipped when checkout() is not supported.
+            return
+        assert cloned_repo.is_clean, "Expected working tree to be clean?!"
+        # Make sure the repository has some tags.
+        assert cloned_repo.ordered_tags, "Need repository with tags to test checkout() support!"
+        # Check out some random tags.
+        available_tags = cloned_repo.tags.keys()
+        for i in range(5):
+            tag = random.choice(available_tags)
+            cloned_repo.checkout(revision=tag)
 
     def test_release_objects(self):
         """
@@ -455,7 +474,14 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertRaises(AmbiguousRepositoryNameError, find_configured_repository, 'test-2')
         self.assertRaises(UnknownRepositoryTypeError, find_configured_repository, 'unsupported-repo-type')
         # Test the Python API with a properly configured repository.
-        return find_configured_repository('test')
+        repository = find_configured_repository('test')
+        # Make sure `last_updated' doesn't blow up on repositories without a local clone.
+        if repository.exists:
+            assert repository.last_updated > 0
+        else:
+            assert repository.last_updated == 0
+        # Hand the constructed repository over to the caller.
+        return repository
 
     def validate_revision(self, revision, id_pattern=HEX_SUM_PATTERN):
         """

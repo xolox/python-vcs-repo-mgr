@@ -7,6 +7,13 @@
 """
 Python API for the `vcs-repo-mgr` package.
 
+.. note:: This module handles subprocess management using :mod:`executor`. This
+          means that the :exc:`~executor.ExternalCommandFailed` exception can
+          be raised at (more or less) any point.
+
+Getting started
+===============
+
 When using `vcs-repo-mgr` as a Python API the following top level entities
 should help you get started:
 
@@ -30,10 +37,19 @@ should help you get started:
   the helper functions that instantiate repository objects for you
   (:func:`coerce_repository()` and :func:`repository_factory()`).
 
-.. note:: This module handles subprocess management using the
-          :func:`executor.execute()` function which means
-          :exc:`executor.ExternalCommandFailed` can be
-          raised at any point.
+Common operations
+=================
+
+The following table lists common repository operations supported by
+`vcs-repo-mgr` and their equivalent Bazaar, Git and Mercurial commands:
+
+=============================  ==========  ============  =========
+vcs-repo-mgr                   Bazaar      Git           Mercurial
+=============================  ==========  ============  =========
+:func:`Repository.create()`    bzr branch  git clone     hg clone
+:func:`Repository.update()`    bzr pull    git fetch     hg pull
+:func:`Repository.checkout()`  (n/a)       git checkout  hg update
+=============================  ==========  ============  =========
 """
 
 # Standard library modules.
@@ -65,7 +81,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.19'
+__version__ = '0.20'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -597,6 +613,29 @@ class Repository(PropertyManager):
         ))
         self.mark_updated()
 
+    def checkout(self, revision=None, clean=False):
+        """
+        Update the repository's local working tree to the specified revision.
+
+        :param revision: The revision to check out (a string, defaults to
+                         :attr:`default_revision`).
+        :param clean: If :data:`True` any changes in the working tree are
+                      discarded (defaults to :data:`False`).
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        self.create()
+        revision = revision or self.default_revision
+        attribute_name = 'checkout_command_clean' if clean else 'checkout_command'
+        command_template = getattr(self, attribute_name, None)
+        if not command_template:
+            raise NotImplementedError("Repository.checkout() not supported for %s repositories!" % self.friendly_name)
+        logger.info("Checking out revision %s in %s ..", revision, self.local)
+        execute(command_template.format(
+            local=pipes.quote(self.local),
+            revision=pipes.quote(revision),
+        ))
+
     def export(self, directory, revision=None):
         """
         Export the complete tree from the local version control repository.
@@ -1075,6 +1114,8 @@ class HgRepo(Repository):
     create_command = 'hg clone --noupdate {remote} {local}'
     create_command_non_bare = 'hg clone {remote} {local}'
     update_command = 'hg pull --repository {local} {remote}'
+    checkout_command = 'hg update --repository {local} --rev {revision}'
+    checkout_command_clean = 'hg update --repository {local} --rev {revision} --clean'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
     @required_property
@@ -1191,6 +1232,8 @@ class GitRepo(Repository):
     create_command = 'git clone --bare {remote} {local}'
     create_command_non_bare = 'git clone {remote} {local}'
     update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
+    checkout_command = 'cd {local} && git checkout {revision}'
+    checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
 
     @required_property
