@@ -118,6 +118,9 @@ UPDATE_VARIABLE = 'VCS_REPO_MGR_UPDATE_LIMIT'
 KNOWN_RELEASE_SCHEMES = ('branches', 'tags')
 """The names of valid release schemes (a tuple of strings)."""
 
+REPOSITORY_TYPES = set()
+"""Available :class:`Repository` subclasses (a :class:`set` of :class:`type` objects)."""
+
 # Initialize a logger.
 logger = logging.getLogger(__name__)
 
@@ -1198,6 +1201,26 @@ class Revision(object):
             fields.append("revision_number=%r" % self.revision_number)
         fields.append("revision_id=%r" % self.revision_id)
         return "%s(%s)" % (self.__class__.__name__, ', '.join(fields))
+
+
+class RepositoryMeta(type):
+
+    """Metaclass for automatic registration of :class:`Repository` subclasses."""
+
+    def __init__(cls, name, bases, dict):
+        """Register a :class:`Repository` subclass as soon as its defined."""
+        # Initialize super classes.
+        type.__init__(cls, name, bases, dict)
+        # Don't register the Repository class itself.
+        if issubclass(cls, Repository):
+            # Register the Repository subclass.
+            REPOSITORY_TYPES.add(cls)
+
+
+# Obscure syntax gymnastics to define a class with a metaclass whose
+# definition is compatible with Python 2.x as well as Python 3.x.
+# See also: https://wiki.python.org/moin/PortingToPy3k/BilingualQuickRef#metaclasses
+Repository = RepositoryMeta('Repository', Repository.__bases__, dict(Repository.__dict__))
 
 
 class Release(object):
