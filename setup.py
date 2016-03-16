@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-"""Setup script for the `vcs-repo-mgr' package."""
-#
+"""Setup script for the `vcs-repo-mgr` package."""
+
 # Author: Peter Odding <peter@peterodding.com>
 # Last Change: March 15, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr

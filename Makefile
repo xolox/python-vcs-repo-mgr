@@ -1,7 +1,7 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 15, 2016
+# Last Change: March 16, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
@@ -50,9 +50,6 @@ readme:
 docs: install
 	test -x "$(VIRTUAL_ENV)/bin/sphinx-build" || ($(ACTIVATE) && pip-accel install sphinx)
 	cd docs && make html
-	if which gnome-open >/dev/null 2>&1; then \
-		gnome-open "docs/build/html/index.html"; \
-	fi
 
 publish:
 	git push origin && git push --tags origin

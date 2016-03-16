@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 15, 2016
+# Last Change: March 16, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -50,6 +50,7 @@ import time
 from executor import execute
 from humanfriendly import coerce_boolean, compact, concatenate, format, format_path, parse_path
 from natsort import natsort, natsort_key
+from property_manager import PropertyManager, required_property, writable_property
 from six import string_types
 from six.moves import configparser
 from six.moves import urllib_parse as urlparse
@@ -64,7 +65,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.18.2'
+__version__ = '0.19'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -300,7 +301,7 @@ class limit_vcs_updates(object):
             del os.environ[UPDATE_VARIABLE]
 
 
-class Repository(object):
+class Repository(PropertyManager):
 
     """
     Base class for version control repository interfaces.
@@ -309,55 +310,15 @@ class Repository(object):
     :class:`GitRepo` instead.
     """
 
-    def __init__(self, local=None, remote=None, bare=None, release_scheme=None, release_filter=None):
+    def __init__(self, local=None, remote=None, bare=None, release_scheme=None, release_filter=None, **kw):
         """
         Initialize a version control repository interface.
 
-        :param local: The pathname of the directory where the local clone of
-                      the repository is stored (a string). If ``remote`` is not
-                      given this argument is required. If ``remote`` is given:
-
-                      - The ``local`` argument can be omitted. In this case a
-                        temporary directory with a stable location will be
-                        selected using :func:`find_cache_directory()`.
-                      - A non-existing local directory can be given, this
-                        directory will be created by cloning the remote
-                        repository.
-        :param remote: The URL of the remote repository (a string). If this is
-                       not given then the local directory must already exist
-                       and contain a supported repository.
-        :param bare: One of the following values:
-
-                     - :data:`True` if the repository doesn't need a working
-                       tree (in older versions of `vcs-repo-mgr` this was the
-                       default and only choice).
-                     - :data:`False` if the repository does need a working
-                       tree (e.g. because you want to create commits in the
-                       repository).
-                     - :data:`None` if you don't care and either option is
-                       acceptable.
-
-                     If you specify a preference for the existence of a working
-                     tree by passing a value for `bare` that isn't :data:`None`
-                     and the repository's local clone already exists, the local
-                     clone will be validated to make sure its state matches the
-                     caller's expectation.
-        :param release_scheme: One of the strings 'tags' (the default) or
-                               'branches'. This determines whether
-                               :attr:`Repository.releases` is based on
-                               :attr:`Repository.tags` or
-                               :attr:`Repository.branches`.
-        :param release_filter: A string containing a regular expression or the
-                               result of :func:`re.compile()`. The regular
-                               expression is used by
-                               :attr:`Repository.releases` to match tags or
-                               branches that signify "releases". If the regular
-                               expression contains a single capture group, the
-                               identifier of a :class:`Release` object is
-                               set to the substring captured by the capture
-                               group (instead of the complete tag or branch
-                               name). This defaults to the regular expression
-                               ``.*`` matching any branch or tag name.
+        :param local: Used to set :attr:`local`.
+        :param remote: Used to set :attr:`remote`.
+        :param bare: Used to set :attr:`bare`.
+        :param release_scheme: Used to set :attr:`release_scheme`.
+        :param release_filter: Used to set :attr:`release_filter`.
         :raises: :exc:`~exceptions.ValueError` for any of the following:
 
                  - Neither the local repository directory nor the remote
@@ -371,45 +332,48 @@ class Repository(object):
                  - The release filter regular expression contains more than one
                    capture group (if you need additional groups but without the
                    capturing aspect use a non-capturing group).
+
+        This method supports two calling conventions:
+
+        1. The old calling convention consists of up to five positional
+           arguments and is supported to preserve backwards compatibility
+           (refer to the arguments documented above).
+        2. The new calling convention is to pass only the required keyword
+           arguments, this improves extensibility. Please refer to the
+           :class:`~property_manager.PropertyManager` documentation for details
+           about the handling of keyword arguments.
         """
-        self.local = local
-        self.remote = remote
-        self.bare = bare
-        self.release_scheme = release_scheme or 'tags'
-        self.release_filter = release_filter or '.*'
+        # Translate positional arguments (dictated by backwards compatibility)
+        # into keyword arguments (expected by our superclass constructor).
+        if local is not None:
+            kw['local'] = local
+        if remote is not None:
+            kw['remote'] = remote
+        if bare is not None:
+            kw['bare'] = bare
+        if release_scheme is not None:
+            kw['release_scheme'] = release_scheme
+        if release_filter is not None:
+            kw['release_filter'] = release_filter
         # Make sure the caller specified at least the local *or* remote.
-        if not (self.local or self.remote):
+        if not kw.get('local') and not kw.get('remote'):
             raise ValueError("No local and no remote repository specified! (one of the two is required)")
+        # Initialize super classes.
+        super(Repository, self).__init__(**kw)
         # Make sure the release scheme was properly specified.
         if self.release_scheme not in KNOWN_RELEASE_SCHEMES:
             msg = "Release scheme %r is not supported! (valid options are %s)"
             raise ValueError(msg % (self.release_scheme, concatenate(map(repr, KNOWN_RELEASE_SCHEMES))))
-        # Make sure the release filter is a valid regular expression. This code
-        # is written so that callers can pass in their own compiled regular
-        # expression if they want to do that.
-        if isinstance(self.release_filter, string_types):
-            self.release_filter = re.compile(self.release_filter)
         # At this point we should be dealing with a regular expression object:
         # Make sure the regular expression has zero or one capture group.
-        if self.release_filter.groups > 1:
+        if self.compiled_filter.groups > 1:
             raise ValueError(compact("""
                 Release filter regular expression pattern is expected to have
                 zero or one capture group, but it has {count} instead!
-            """, count=self.release_filter.groups))
-        # If the caller specified a remote repository but no local clone we
-        # assume they don't care about the location of the local clone so we
-        # can make something up (i.e. vcs-repo-mgr will act as an exclusive
-        # proxy to the local clone).
-        if self.remote and not self.local:
-            self.local = find_cache_directory(self.remote)
-        # Compute the `exists' property only once inside Repository.__init__().
+            """, count=self.compiled_filter.groups))
+        # Validation that's conditional to whether the local clone exists.
         if self.exists:
-            if self.bare is None:
-                # If the caller didn't specify their preference for the
-                # existence of a working tree then the existing repository
-                # state is acceptable either way :-).
-                self.bare = self.is_bare
-            elif self.bare != self.is_bare:
+            if self.bare != self.is_bare:
                 # Abort if the caller's preference for the existence of a
                 # working tree doesn't match the existing repository state.
                 raise ValueError(format(
@@ -423,26 +387,131 @@ class Repository(object):
             if not self.remote:
                 msg = "Local repository (%r) doesn't exist and no remote repository specified!"
                 raise ValueError(msg % self.local)
-            # Default to bare=True for backwards compatibility.
-            if self.bare is None:
-                self.bare = True
+
+    @required_property(cached=True)
+    def local(self):
+        """
+        The pathname of the repository's local clone (a string).
+
+        If :attr:`remote` is set but :attr:`local` isn't set it is assumed that
+        the location of the local clone doesn't matter (because `vcs-repo-mgr`
+        will act as an exclusive proxy to the local clone) and :attr:`local` is
+        computed (once) using :func:`find_cache_directory()`.
+        """
+        if self.remote:
+            return find_cache_directory(self.remote)
+
+    @writable_property
+    def remote(self):
+        """
+        The location of the remote (upstream) repository (a string).
+
+        In most cases :attr:`remote` will be a URL pointing to a remote
+        repository but it can also be a pathname of a local directory. If
+        :attr:`remote` isn't given then :attr:`local` must be set to the
+        pathname of an existing local repository clone.
+        """
+
+    @writable_property
+    def bare(self):
+        """
+        Whether the local repository clone should be bare (a boolean or :data:`None`).
+
+        This property specifies whether the local repository clone should have
+        a working tree or not:
+
+        - :data:`True` means the local clone doesn't need and shouldn't have a
+          working tree (in older versions of `vcs-repo-mgr` this was the
+          default and only choice).
+
+        - :data:`False` means the local clone does need a working tree (for
+          example because you want to commit).
+
+        The value of :attr:`bare` defaults to :attr:`is_bare` for repositories
+        with an existing local clone, if only to preserve compatibility with
+        versions of `vcs-repo-mgr` that didn't have working tree support. For
+        repositories without a local clone, :attr:`bare` defaults to
+        :data:`True` so that :func:`create()` defaults to creating bare clones.
+
+        If :attr:`bare` is explicitly set and the local clone already exists it
+        will be checked by :func:`__init__()` to make sure that the values of
+        :attr:`bare` and :attr:`is_bare` match. If they don't an exception will
+        be raised.
+        """
+        return self.is_bare if self.exists else True
+
+    @writable_property
+    def release_scheme(self):
+        """
+        The repository's release scheme (a string, defaults to 'tags').
+
+        The value of :attr:`release_scheme` determines whether
+        :attr:`Repository.releases` is based on :attr:`Repository.tags` or
+        :attr:`Repository.branches`. It should match one of the values in
+        :data:`KNOWN_RELEASE_SCHEMES`.
+        """
+        return 'tags'
+
+    @writable_property
+    def release_filter(self):
+        """
+        The repository's release filter (a string or regular expression, defaults to ``.*``).
+
+        The value of :attr:`release_filter` should be a string containing a
+        regular expression or the result of :func:`re.compile()`. The regular
+        expression is used by :attr:`Repository.releases` to match tags or
+        branches that signify "releases". If the regular expression contains a
+        single capture group, the identifier of a :class:`Release` object is
+        set to the substring captured by the capture group (instead of the
+        complete tag or branch name). This defaults to the regular expression
+        ``.*`` which matches any branch or tag name.
+        """
+        return '.*'
 
     @property
+    def compiled_filter(self):
+        """
+        The result of :func:`re.compile()` on :attr:`release_filter`.
+
+        If :attr:`release_filter` isn't a string then it is assumed to be a
+        compiled regular expression object and returned directly.
+        """
+        pattern = self.release_filter
+        if isinstance(pattern, string_types):
+            pattern = re.compile(pattern)
+        return pattern
+
+    @required_property
+    def friendly_name(self):
+        """
+        The human friendly name for the repository's version control system (a string).
+
+        The :attr:`friendly_name` property needs to be provided by subclasses
+        and/or the caller (by passing it to :func:`__init__()` as a keyword
+        argument).
+        """
+
+    @required_property
     def vcs_directory(self):
         """
-        Find the "dot" directory containing the VCS files.
+        The pathname of the directory containing the local clone's VCS files (a string).
 
-        :returns: The pathname of a directory (a string).
+        The :attr:`vcs_directory` property needs to be implemented by
+        subclasses and/or passed to :func:`__init__()` as a keyword argument.
         """
-        raise NotImplementedError()
+
+    @required_property
+    def default_revision(self):
+        """
+        The default revision for the given version control system and repository (a string).
+
+        The :attr:`default_revision` property needs to be implemented by
+        subclasses and/or passed to :func:`__init__()` as a keyword argument.
+        """
 
     @property
     def exists(self):
-        """
-        Check if the local directory contains a supported version control repository.
-
-        :returns: ``True`` if the local directory contains a repository, ``False`` otherwise.
-        """
+        """:data:`True` if the local clone exists, :data:`False` otherwise."""
         raise NotImplementedError()
 
     @property
@@ -457,13 +526,11 @@ class Repository(object):
     @property
     def last_updated(self):
         """
-        Find the date and time when `vcs-repo-mgr` last checked for updates.
+        The date/time when `vcs-repo-mgr` last checked for updates (an integer).
 
-        Used internally by the :func:`update()` method when used in
-        combination with :class:`limit_vcs_updates`.
-
-        :returns: The number of seconds since the UNIX epoch (0 for remote
-                  repositories that don't have a local clone yet).
+        Used internally by :func:`update()` when used in combination with
+        :class:`limit_vcs_updates`. The value is a UNIX time stamp (0 for
+        remote repositories that don't have a local clone yet).
         """
         try:
             with open(self.last_updated_file) as handle:
@@ -473,9 +540,9 @@ class Repository(object):
 
     def mark_updated(self):
         """
-        Mark a successful repository update so that :attr:`last_updated` can report it.
+        Mark a successful update so that :attr:`last_updated` can report it.
 
-        Used internally by the :func:`update()` method.
+        Used internally by :func:`update()`.
         """
         with open(self.last_updated_file, 'w') as handle:
             handle.write('%i\n' % time.time())
@@ -484,8 +551,8 @@ class Repository(object):
         """
         Create the local clone of the remote version control repository.
 
-        :returns: ``True`` if the repository was just created, ``False`` if it
-                  already existed.
+        :returns: :data:`True` if the repository was just created,
+                  :data:`False` if it already existed.
 
         It's not an error if the repository already exists.
         """
@@ -536,8 +603,8 @@ class Repository(object):
 
         :param directory: The directory where the tree should be exported (a
                           string).
-        :param revision: The revision to export (a string). Defaults to the
-                         latest revision in the default branch.
+        :param revision: The revision to export (a string, defaults to
+                         :attr:`default_revision`).
 
         .. note:: Automatically creates the local repository on the first run.
         """
@@ -554,12 +621,20 @@ class Repository(object):
 
     @property
     def is_bare(self):
-        """:data:`True` if the repository is a bare checkout, :data:`False` otherwise."""
+        """
+        :data:`True` if the repository is a bare checkout, :data:`False` otherwise.
+
+        The :attr:`is_bare` property needs to be implemented by subclasses.
+        """
         raise NotImplementedError()
 
     @property
     def is_clean(self):
-        """:data:`True` if the working tree is clean, :data:`False` otherwise."""
+        """
+        :data:`True` if the working tree is clean, :data:`False` otherwise.
+
+        The :attr:`is_clean` property needs to be implemented by subclasses.
+        """
         raise NotImplementedError()
 
     def ensure_clean(self):
@@ -580,11 +655,13 @@ class Repository(object):
         Find the local revision number of the given revision.
 
         :param revision: A reference to a revision, most likely the name of a
-                         branch (a string). Defaults to the latest revision in
-                         the default branch.
+                         branch (a string, defaults to :attr:`default_revision`).
         :returns: The local revision number (an integer).
 
         .. note:: Automatically creates the local repository on the first run.
+
+        The :func:`find_revision_number()` method needs to be implemented by
+        subclasses.
         """
         raise NotImplementedError()
 
@@ -593,11 +670,13 @@ class Repository(object):
         Find the global revision id of the given revision.
 
         :param revision: A reference to a revision, most likely the name of a
-                         branch (a string). Defaults to the latest revision in
-                         the default branch.
+                         branch (a string, defaults to :attr:`default_revision`).
         :returns: The global revision id (a hexadecimal string).
 
         .. note:: Automatically creates the local repository on the first run.
+
+        The :func:`find_revision_id()` method needs to be implemented by
+        subclasses.
         """
         raise NotImplementedError()
 
@@ -606,8 +685,7 @@ class Repository(object):
         Generate a Debian control file name/value pair for the given repository and revision.
 
         :param revision: A reference to a revision, most likely the name of a
-                         branch (a string). Defaults to the latest revision in
-                         the default branch.
+                         branch (a string, defaults to :attr:`default_revision`).
         :returns: A tuple with two strings: The name of the field and the value.
 
         This generates a ``Vcs-Bzr`` field for Bazaar_ repositories, a
@@ -748,10 +826,11 @@ class Repository(object):
          Release(revision=Revision(..., tag='v2.3.7', ...), identifier='2.3.7'),
          Release(revision=Revision(..., tag='v2.4.0', ...), identifier='2.4.0')]
         """
+        pattern = self.compiled_filter
         available_releases = {}
         available_revisions = getattr(self, self.release_scheme)
         for identifier, revision in available_revisions.items():
-            match = self.release_filter.match(identifier)
+            match = pattern.match(identifier)
             if match:
                 # If the regular expression contains a capturing group we
                 # set the release identifier to the captured substring
@@ -992,17 +1071,21 @@ class HgRepo(Repository):
     """
 
     friendly_name = 'Mercurial'
-    default_revision = 'default'
     control_field = 'Vcs-Hg'
     create_command = 'hg clone --noupdate {remote} {local}'
     create_command_non_bare = 'hg clone {remote} {local}'
     update_command = 'hg pull --repository {local} {remote}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
-    @property
+    @required_property
     def vcs_directory(self):
         """The pathname of the ``.hg`` directory (a string)."""
         return os.path.join(self.local, '.hg')
+
+    @required_property
+    def default_revision(self):
+        """The default revision for Mercurial repositories (a string, defaults to ``default``)."""
+        return 'default'
 
     @property
     def exists(self):
@@ -1104,14 +1187,13 @@ class GitRepo(Repository):
     """
 
     friendly_name = 'Git'
-    default_revision = 'master'
     control_field = 'Vcs-Git'
     create_command = 'git clone --bare {remote} {local}'
     create_command_non_bare = 'git clone {remote} {local}'
     update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
 
-    @property
+    @required_property
     def vcs_directory(self):
         """
         The pathname of the ``.git`` directory (a string).
@@ -1124,6 +1206,11 @@ class GitRepo(Repository):
         """
         directory = os.path.join(self.local, '.git')
         return directory if os.path.isdir(directory) else self.local
+
+    @required_property
+    def default_revision(self):
+        """The default revision for Git repositories (a string, defaults to ``master``)."""
+        return 'master'
 
     @property
     def exists(self):
@@ -1219,17 +1306,21 @@ class BzrRepo(Repository):
     """
 
     friendly_name = 'Bazaar'
-    default_revision = 'last:1'
     control_field = 'Vcs-Bzr'
     create_command = 'bzr branch --no-tree --use-existing-dir {remote} {local}'
     create_command_non_bare = 'bzr branch --use-existing-dir {remote} {local}'
     update_command = 'cd {local} && bzr pull {remote}'
     export_command = 'cd {local} && bzr export --revision={revision} {directory}'
 
-    @property
+    @required_property
     def vcs_directory(self):
         """The pathname of the ``.bzr`` directory (a string)."""
         return os.path.join(self.local, '.bzr')
+
+    @required_property
+    def default_revision(self):
+        """The default revision for Bazaar repositories (a string, defaults to ``last:1``)."""
+        return 'last:1'
 
     @property
     def exists(self):

@@ -64,8 +64,11 @@ pygments_style = 'sphinx'
 
 # Refer to the Python standard library.
 # From: http://twistedmatrix.com/trac/ticket/4582.
-intersphinx_mapping = {'python': ('http://docs.python.org', None),
-                       'executor': ('http://executor.readthedocs.org/en/latest', None)}
+intersphinx_mapping = {
+    'python': ('https://docs.python.org', None),
+    'executor': ('https://executor.readthedocs.org/en/latest', None),
+    'propertymanager': ('https://property-manager.readthedocs.org/en/latest', None),
+}
 
 # -- Options for HTML output ---------------------------------------------------
 
