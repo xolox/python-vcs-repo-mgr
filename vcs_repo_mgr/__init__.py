@@ -81,7 +81,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.22.3'
+__version__ = '0.23'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -678,6 +678,27 @@ class Repository(PropertyManager):
             revision=revision,
         ))
 
+    def create_branch(self, branch_name):
+        """
+        Create a new branch based on the working tree's revision.
+
+        :param branch_name: The name of the branch to create (a string).
+
+        This method automatically checks out the new branch, but note that the
+        new branch may not actually exist until a commit has been made on the
+        branch.
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        self.create()
+        logger.info("Creating branch %s in %s ..", branch_name, self.local)
+        execute(self.get_command(
+            method_name='create_branch',
+            attribute_name='create_branch_command',
+            local=self.local,
+            branch_name=branch_name,
+        ))
+
     def commit(self, message, author=None):
         """
         Commit changes to tracked files in the working tree.
@@ -1190,6 +1211,7 @@ class HgRepo(Repository):
     update_command = 'hg pull --repository {local} {remote}'
     checkout_command = 'hg update --repository {local} --rev {revision}'
     checkout_command_clean = 'hg update --repository {local} --rev {revision} --clean'
+    create_branch_command = 'hg branch --repository {local} {branch_name}'
     commit_command = 'hg commit --repository {local} --user {author_name}" <"{author_email}">" --message {message}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
@@ -1325,6 +1347,7 @@ class GitRepo(Repository):
     update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
     checkout_command = 'cd {local} && git checkout {revision}'
     checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
+    create_branch_command = 'cd {local} && git checkout -b {branch_name}'
     commit_command = compact('''
         cd {local} && git
             -c user.name={author_name}

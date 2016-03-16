@@ -11,6 +11,7 @@ import os
 import random
 import re
 import shutil
+import string
 import sys
 import tempfile
 import unittest
@@ -340,58 +341,91 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertRaises(WorkingTreeNotCleanError, cloned_repo.ensure_clean)
         self.check_checkout_support(cloned_repo)
         self.check_commit_support(cloned_repo)
+        self.check_branch_support(cloned_repo)
 
-    def check_checkout_support(self, cloned_repo):
+    def check_checkout_support(self, repository):
         """Make sure that checkout() works and it can clean the working tree."""
+        logger.info("Testing checkout() support ..")
         try:
-            cloned_repo.checkout(clean=True)
+            repository.checkout(clean=True)
         except NotImplementedError:
-            pass
+            logger.warning("checkout() not supported for %s repositories ..", repository.friendly_name)
         else:
-            assert cloned_repo.is_clean, "Expected working tree to be clean?!"
+            assert repository.is_clean, "Expected working tree to be clean?!"
             # Make sure the repository has some tags.
-            assert cloned_repo.ordered_tags, "Need repository with tags to test checkout() support!"
+            assert repository.ordered_tags, "Need repository with tags to test checkout() support!"
             # Check out some random tags.
-            available_tags = list(cloned_repo.tags.keys())
+            available_tags = list(repository.tags.keys())
             for i in range(5):
                 tag = random.choice(available_tags)
-                cloned_repo.checkout(revision=tag)
+                repository.checkout(revision=tag)
 
-    def check_commit_support(self, cloned_repo):
+    def check_commit_support(self, repository):
         """Make sure we can make new commits."""
+        logger.info("Testing commit() support ..")
         try:
             # Make sure we start with a clean working tree.
-            cloned_repo.checkout(clean=True)
-            # Find a tracked file to modify (so we have something to commit).
-            made_changes = False
-            vcs_directory = os.path.abspath(cloned_repo.vcs_directory)
-            for root, dirs, files in os.walk(cloned_repo.local):
-                for filename in files:
-                    if not made_changes:
-                        # Make sure we don't directly change VCS metadata files.
-                        pathname = os.path.abspath(os.path.join(root, filename))
-                        common_prefix = os.path.commonprefix([vcs_directory, pathname])
-                        if common_prefix != vcs_directory:
-                            # Add a line to the end of the file.
-                            with open(pathname, 'a') as handle:
-                                handle.write('\n\n# This is a test\n')
-                            made_changes = True
-            # Get the global revision id of the most recent commit.
-            old_id = cloned_repo.find_revision_id()
+            repository.checkout(clean=True)
+            # Mutate a tracked file in the repository's working tree.
+            self.mutate_working_tree(repository)
             # Make sure the working tree is no longer clean.
-            assert not cloned_repo.is_clean
-            # Commit the change we made.
-            cloned_repo.commit(
-                author="Peter Odding <vcs-repo-mgr@peterodding.com>",
-                message="This is a test",
-            )
+            assert not repository.is_clean
+            # Commit the change we made and ensure that commit() actually
+            # creates a new revision in the relevant branch.
+            with EnsureNewCommit(repository):
+                repository.commit(
+                    author="Peter Odding <vcs-repo-mgr@peterodding.com>",
+                    message="This is a test",
+                )
             # Make sure the working tree is clean again.
-            assert cloned_repo.is_clean
-            # Make sure the global revision id has changed.
-            new_id = cloned_repo.find_revision_id()
-            assert new_id != old_id
+            assert repository.is_clean
         except NotImplementedError:
-            pass
+            logger.warning("commit() not supported for %s repositories ..", repository.friendly_name)
+
+    def check_branch_support(self, repository):
+        """Make sure we can create new branches."""
+        logger.info("Testing create_branch() support ..")
+        try:
+            # Generate a non-existing branch name.
+            while True:
+                branch_name = random_string()
+                if branch_name not in repository.branches:
+                    break
+            # Make sure we start with a clean working tree.
+            repository.checkout(clean=True)
+            # Create the new branch.
+            repository.create_branch(branch_name)
+            # Mutate a tracked file in the repository's working tree.
+            self.mutate_working_tree(repository)
+            # Make sure the working tree is no longer clean.
+            assert not repository.is_clean
+            # Commit the change we made and ensure that commit() actually
+            # creates a new revision in the relevant branch.
+            with EnsureNewCommit(repository, branch_name=branch_name):
+                repository.commit(
+                    author="Peter Odding <vcs-repo-mgr@peterodding.com>",
+                    message="This is a test",
+                )
+            # Make sure the working tree is clean again.
+            assert repository.is_clean
+            # Make sure the new branch has been created.
+            assert branch_name in repository.branches
+        except NotImplementedError:
+            logger.warning("create_branch() not supported for %s repositories ..", repository.friendly_name)
+
+    def mutate_working_tree(self, repository):
+        """Mutate an arbitrary tracked file in the repository's working tree."""
+        vcs_directory = os.path.abspath(repository.vcs_directory)
+        for root, dirs, files in os.walk(repository.local):
+            for filename in files:
+                # Make sure we don't directly change VCS metadata files (it
+                # could corrupt the repository).
+                pathname = os.path.abspath(os.path.join(root, filename))
+                common_prefix = os.path.commonprefix([vcs_directory, pathname])
+                if common_prefix != vcs_directory:
+                    with open(pathname, 'a') as handle:
+                        handle.write('\n\n# This is a test\n')
+                    return
 
     def test_release_objects(self):
         """
@@ -547,6 +581,27 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             self.validate_revision(revision, **kw)
 
 
+class EnsureNewCommit(object):
+
+    """Context manager which ensures that a new commit is made."""
+
+    def __init__(self, repository, branch_name=None):
+        """Initialize a :class:`EnsureNewCommit` object."""
+        self.repository = repository
+        self.branch_name = branch_name
+        self.old_id = None
+
+    def __enter__(self):
+        """Capture the global revision id of the most recent commit on the given branch."""
+        if self.branch_name in self.repository.branches:
+            self.old_id = self.repository.find_revision_id(revision=self.branch_name)
+
+    def __exit__(self, exc_type=None, exc_value=None, traceback=None):
+        """Make sure a new commit was introduced since :func:`__enter__()`."""
+        new_id = self.repository.find_revision_id(revision=self.branch_name)
+        assert new_id != self.old_id
+
+
 def call(*arguments):
     """Helper to call the command line interface from the current Python process."""
     saved_stdout = sys.stdout
@@ -559,3 +614,8 @@ def call(*arguments):
     finally:
         sys.stdout = saved_stdout
         sys.argv = saved_argv
+
+
+def random_string(length=25):
+    """Generate a random string."""
+    return ''.join(random.choice(string.ascii_letters) for i in range(length))
