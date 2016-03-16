@@ -253,6 +253,31 @@ you have to export a revision to a (temporary) directory:
    -rw-rw-r-- 1 peter peter 5.4K May  3 14:31 README.rst
    -rwxrwxr-x 1 peter peter 1.1K May  3 14:31 setup.py
 
+Future improvements
+-------------------
+
+This section is currently a "braindump" which means I haven't committed to any
+of these improvements, I'm just thinking out loud ;-).
+
+**Enable more extensive customization**
+ Right now the version control commands are hard coded and not easy to
+ customize for those cases where the existing API gets you 90% of where you
+ want to be but makes that last 10% impossible. Technically this is already
+ possible through subclassing, but a more lightweight solution would
+ certainly be nice to have :-).
+
+**Switch to executor.contexts**
+ Switch to executor.contexts_ for external command execution to enable
+ dependency injection of command execution contexts. I haven't really
+ investigated how complex the switch will be. It might be possible to somehow
+ combine the above point (enable customization) and this point (dependency
+ injection) but I'm not yet sure what that would look like.
+
+**Extend Bazaar support**
+ Try to bring Bazaar_ support up to par with the features supported for Git_
+ and Mercurial_ repositories. To be honest I'm not sure this is worth the
+ effort, I find myself working with Bazaar repositories less and less.
+
 Contact
 -------
 
@@ -269,6 +294,7 @@ This software is licensed under the `MIT license`_.
 
 .. External references:
 .. _Bazaar: http://bazaar.canonical.com/en/
+.. _executor.contexts: http://executor.readthedocs.org/en/latest/#module-executor.contexts
 .. _Git: http://git-scm.com/
 .. _GitHub: https://github.com/xolox/python-vcs-repo-mgr
 .. _Mercurial: http://mercurial.selenic.com/
