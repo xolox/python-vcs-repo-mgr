@@ -348,7 +348,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Make sure the repository has some tags.
         assert cloned_repo.ordered_tags, "Need repository with tags to test checkout() support!"
         # Check out some random tags.
-        available_tags = cloned_repo.tags.keys()
+        available_tags = list(cloned_repo.tags.keys())
         for i in range(5):
             tag = random.choice(available_tags)
             cloned_repo.checkout(revision=tag)
