@@ -81,7 +81,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.22.2'
+__version__ = '0.22.3'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -693,12 +693,19 @@ class Repository(PropertyManager):
         author = author or self.author
         if not author:
             raise ValueError("You need to specify an author for your commit!")
+        match = re.match('^(.+?) <(.+?)>$', author)
+        if not match:
+            msg = "The given author (%s) isn't in the 'name <email>' format!"
+            raise ValueError(msg % author)
+        author_name = match.group(1)
+        author_email = match.group(2)
         logger.info("Committing changes in working tree of %s: %s", self.local, message)
         execute(self.get_command(
             method_name='commit',
             attribute_name='commit_command',
             local=self.local,
-            author=author,
+            author_name=author_name,
+            author_email=author_email,
             message=message,
         ))
 
@@ -1183,7 +1190,7 @@ class HgRepo(Repository):
     update_command = 'hg pull --repository {local} {remote}'
     checkout_command = 'hg update --repository {local} --rev {revision}'
     checkout_command_clean = 'hg update --repository {local} --rev {revision} --clean'
-    commit_command = 'hg commit --repository {local} --user {author} --message {message}'
+    commit_command = 'hg commit --repository {local} --user {author_name}" <"{author_email}">" --message {message}'
     export_command = 'hg archive --repository {local} --rev {revision} {directory}'
 
     @writable_property(cached=True)
@@ -1318,7 +1325,12 @@ class GitRepo(Repository):
     update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
     checkout_command = 'cd {local} && git checkout {revision}'
     checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
-    commit_command = 'cd {local} && git commit --all --author {author} --message {message}'
+    commit_command = compact('''
+        cd {local} && git
+            -c user.name={author_name}
+            -c user.email={author_email}
+            commit --all --message {message}
+    ''')
     export_command = 'cd {local} && git archive {revision} | tar --extract --directory={directory}'
 
     @writable_property(cached=True)
