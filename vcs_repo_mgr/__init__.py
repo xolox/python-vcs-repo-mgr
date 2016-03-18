@@ -87,7 +87,7 @@ import time
 
 # External dependencies.
 from executor import execute, quote
-from humanfriendly import coerce_boolean, compact, concatenate, format, format_path, parse_path
+from humanfriendly import Timer, coerce_boolean, compact, concatenate, format, format_path, parse_path, pluralize
 from natsort import natsort, natsort_key
 from property_manager import PropertyManager, lazy_property, required_property, writable_property
 from six import string_types
@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.28'
+__version__ = '0.29'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -872,6 +872,100 @@ class Repository(PropertyManager):
             **self.get_author()
         ))
 
+    def merge_up(self, target_branch=None, feature_branch=None, delete=True):
+        """
+        Merge a change into one or more release branches and the default branch.
+
+        :param target_branch: The name of the release branch where merging of
+                              the feature branch starts (a string or
+                              :data:`None`, defaults to
+                              :attr:`current_branch`).
+        :param feature_branch: The feature branch to merge in (a string or
+                               :data:`None`). Strings are parsed using
+                               :class:`FeatureBranchSpec`.
+        :param delete: :data:`True` (the default) to delete or close the
+                       feature branch after it is merged, :data:`False`
+                       otherwise.
+        :returns: If `feature_branch` is given the global revision id of the
+                  feature branch is returned, otherwise the global revision id
+                  of the target branch (before any merges performed by
+                  :func:`merge_up()`) is returned.
+        :raises: The following exceptions can be raised:
+
+                 - :exc:`~exceptions.TypeError` when `target_branch` and
+                   :attr:`current_branch` are both :data:`None`.
+                 - :exc:`~exceptions.ValueError` when the given target branch
+                   doesn't exist (based on :attr:`branches`).
+        """
+        timer = Timer()
+        # Validate the target branch or select the default target branch.
+        if target_branch:
+            if target_branch not in self.branches:
+                raise ValueError("The target branch %r doesn't exist!" % target_branch)
+        else:
+            target_branch = self.current_branch
+            if not target_branch:
+                raise TypeError("You need to specify the target branch! (where merging starts)")
+        # Parse the feature branch specification.
+        feature_branch = FeatureBranchSpec(feature_branch) if feature_branch else None
+        # Make sure we start with a clean working tree.
+        self.ensure_clean()
+        # Make sure we're up to date with our upstream repository (if any).
+        self.update()
+        # Check out the target branch.
+        self.checkout(revision=target_branch)
+        # Get the global revision id of the release branch we're about to merge.
+        revision_to_merge = self.find_revision_id(target_branch)
+        # Check if we need to merge in a feature branch.
+        if feature_branch:
+            if feature_branch.location:
+                # Pull in the feature branch.
+                self.update(remote=feature_branch.location)
+            # Get the global revision id of the feature branch we're about to merge.
+            revision_to_merge = self.find_revision_id(feature_branch.revision)
+            # Merge in the feature branch.
+            self.merge(revision=feature_branch.revision)
+            # Commit the merge.
+            self.commit(message="Merged %s" % feature_branch.expression)
+        # Find the release branches in the repository.
+        release_branches = [release.revision.branch for release in self.ordered_releases]
+        logger.debug("Found %s: %s",
+                     pluralize(len(release_branches), "release branch", "release branches"),
+                     concatenate(release_branches))
+        # Find the release branches after the target branch.
+        later_branches = release_branches[release_branches.index(target_branch) + 1:]
+        logger.info("Found %s after target branch (%s): %s",
+                    pluralize(len(later_branches), "release branch", "release branches"),
+                    target_branch,
+                    concatenate(later_branches))
+        # Determine the branches that need to be merged.
+        branches_to_upmerge = later_branches + [self.default_revision]
+        logger.info("Merging up from %s to %s: %s",
+                    target_branch,
+                    pluralize(len(branches_to_upmerge), "branch", "branches"),
+                    concatenate(branches_to_upmerge))
+        # Merge the feature branch up through the selected branches.
+        merge_queue = [target_branch] + branches_to_upmerge
+        while len(merge_queue) >= 2:
+            from_branch = merge_queue[0]
+            to_branch = merge_queue[1]
+            logger.info("Merging %s into %s ..", from_branch, to_branch)
+            self.checkout(revision=to_branch)
+            self.merge(revision=from_branch)
+            self.commit(message="Merged %s" % from_branch)
+            merge_queue.pop(0)
+        # Check if we need to delete or close the feature branch.
+        if delete and feature_branch and feature_branch.revision in self.branches:
+            # Delete or close the feature branch.
+            self.delete_branch(
+                branch_name=feature_branch.revision,
+                message="Closing feature branch %s" % feature_branch.revision,
+            )
+            # Update the working tree to the default branch.
+            self.checkout()
+        logger.info("Done! Finished merging up in %s.", timer)
+        return revision_to_merge
+
     def add_files(self, *pathnames, **kw):
         """
         Stage new files in the working tree to be included in the next commit.
@@ -1410,6 +1504,68 @@ class Release(object):
             "revision=%r" % self.revision,
             "identifier=%r" % self.identifier,
         ]))
+
+
+class FeatureBranchSpec(PropertyManager):
+
+    """Simple and human friendly feature branch specifications."""
+
+    def __init__(self, expression):
+        """
+        Initialize a :class:`FeatureBranchSpec` object.
+
+        :param expression: A feature branch specification (a string).
+
+        The `expression` string is parsed as follows:
+
+        - If `expression` contains two nonempty substrings separated by the
+          character ``#`` it is split into two parts where the first part is
+          used to set :attr:`location` and the second part is used to set
+          :attr:`revision`.
+        - Otherwise `expression` is interpreted as a revision without a
+          location (in this case :attr:`location` will be :data:`None`).
+
+        Some examples to make things more concrete:
+
+        >>> from vcs_repo_mgr import FeatureBranchSpec
+        >>> FeatureBranchSpec('https://github.com/xolox/python-vcs-repo-mgr.git#remote-feature-branch')
+        FeatureBranchSpec(expression='https://github.com/xolox/python-vcs-repo-mgr.git#remote-feature-branch',
+                          location='https://github.com/xolox/python-vcs-repo-mgr.git',
+                          revision='remote-feature-branch')
+        >>> FeatureBranchSpec('local-feature-branch')
+        FeatureBranchSpec(expression='local-feature-branch',
+                          location=None,
+                          revision='local-feature-branch')
+        """
+        super(FeatureBranchSpec, self).__init__(expression=expression)
+
+    @required_property
+    def expression(self):
+        """The feature branch specification provided by the user (a string)."""
+
+    @writable_property
+    def location(self):
+        """
+        The location of the repository that contains :attr:`revision` (a string or :data:`None`).
+
+        The computed default value of :attr:`location` is based on the value of
+        :attr:`expression` as described in the documentation of
+        :func:`__init__()`.
+        """
+        location, _, revision = self.expression.partition('#')
+        return location if location and revision else None
+
+    @required_property
+    def revision(self):
+        """
+        The name of the feature branch (a string).
+
+        The computed default value of :attr:`revision` is based on the value of
+        :attr:`expression` as described in the documentation of
+        :func:`__init__()`.
+        """
+        location, _, revision = self.expression.partition('#')
+        return revision if location and revision else self.expression
 
 
 class HgRepo(Repository):

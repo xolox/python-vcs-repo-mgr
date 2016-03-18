@@ -314,14 +314,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Make sure the source repository contains a bare checkout.
         assert source_repo.is_bare, "Expected a bare repository checkout!"
         # Create a clone of the repository that does have a working tree.
-        # TODO Cloning of repository objects might deserve being a feature?
-        kw = dict((n, getattr(source_repo, n)) for n in ('release_scheme', 'release_filter', 'default_revision'))
-        cloned_repo = source_repo.__class__(
-            author="Peter Odding <vcs-repo-mgr@peterodding.com>",
-            local=create_temporary_directory(),
-            remote=source_repo.local,
-            bare=False, **kw
-        )
+        cloned_repo = self.clone_repo(source_repo, bare=False)
         # Make sure the clone doesn't exist yet.
         assert not cloned_repo.exists
         # Create the clone.
@@ -345,6 +338,20 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.check_checkout_support(cloned_repo)
         self.check_commit_support(cloned_repo)
         self.check_branch_support(cloned_repo)
+        self.check_merge_up_support(cloned_repo)
+
+    def clone_repo(self, repository, **kw):
+        """Clone a repository object."""
+        # TODO Cloning of repository objects might deserve being a feature?
+        properties = 'bare', 'default_revision', 'release_scheme', 'release_filter'
+        options = dict((n, getattr(repository, n)) for n in properties)
+        options.update(kw)
+        return repository.__class__(
+            author="Peter Odding <vcs-repo-mgr@peterodding.com>",
+            local=create_temporary_directory(),
+            remote=repository.local,
+            **options
+        )
 
     def check_checkout_support(self, repository):
         """Make sure that checkout() works and it can clean the working tree."""
@@ -436,6 +443,54 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                 repository.merge(source_branch)
                 assert not repository.is_clean
                 repository.commit(message="This is a merge test")
+        except NotImplementedError as e:
+            logger.warning("%s", e)
+
+    def check_merge_up_support(self, repository, num_branches=5):
+        """Make sure we can merge changes up through release branches."""
+        logger.info("Testing merge_up() support ..")
+        try:
+            # Clone the repository with a custom release scheme/filter.
+            repository = self.clone_repo(
+                repository, bare=False,
+                release_scheme='branches',
+                release_filter='^v(\d*)$',
+            )
+            # Pick a directory name of which we can reasonably expect that
+            # no existing repository will already contain this directory.
+            unique_directory = 'vcs-repo-mgr-merge-up-support-%s' % random_string()
+            absolute_directory = os.path.join(repository.local, unique_directory)
+            # Create the release branches.
+            previous_branch = repository.current_branch
+            for i in range(1, num_branches + 1):
+                branch_name = 'v%i' % i
+                repository.checkout(revision=previous_branch)
+                repository.create_branch(branch_name)
+                if not os.path.isdir(absolute_directory):
+                    os.mkdir(absolute_directory)
+                with open(os.path.join(absolute_directory, branch_name), 'w') as handle:
+                    handle.write("Version %i\n" % i)
+                repository.add_files(all=True)
+                repository.commit(message="Create release branch %s" % branch_name)
+                previous_branch = branch_name
+            # Create a feature branch based on the initial release branch.
+            feature_branch = 'vcs-repo-mgr-feature-branch-%s' % random_string()
+            repository.checkout('v1')
+            repository.create_branch(feature_branch)
+            with open(os.path.join(absolute_directory, 'v1'), 'w') as handle:
+                handle.write("Version 1.1\n")
+            repository.commit(message="Fixed a bug in version 1")
+            assert feature_branch in repository.branches
+            # Merge the change up into the release branches.
+            expected_revision = repository.find_revision_id(revision=feature_branch)
+            merged_revision = repository.merge_up(target_branch='v1', feature_branch=feature_branch)
+            assert merged_revision == expected_revision
+            # Make sure the feature branch was closed.
+            assert feature_branch not in repository.branches
+            # Validate the contents of the default branch.
+            repository.checkout()
+            entries = os.listdir(absolute_directory)
+            assert all('v%i' % i in entries for i in range(1, num_branches + 1))
         except NotImplementedError as e:
             logger.warning("%s", e)
 
