@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 16, 2016
+# Last Change: March 18, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.27'
+__version__ = '0.27.1'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -1403,7 +1403,15 @@ class HgRepo(Repository):
         hg -R {local} commit --user={author_combined} --message={message} --close-branch
     ''')
     merge_command = 'hg -R {local} merge --rev={revision}'
-    commit_command = 'hg -R {local} commit --user={author_combined} --message={message}'
+    # The `hg remove --after' command is used to match the semantics of `git
+    # commit --all' however `hg remove --after' is _very_ verbose (it comments
+    # on every existing file in the repository) and unfortunately it ignores
+    # the `--quiet' option. This explains why I've decided to silence the
+    # standard error stream (though I feel I may regret this later).
+    commit_command = compact('''
+        hg -R {local} remove --after 2>/dev/null &&
+        hg -R {local} commit --user={author_combined} --message={message}
+    ''')
     export_command = 'hg -R {local} archive --rev={revision} {directory}'
 
     @staticmethod
