@@ -274,6 +274,14 @@ Future improvements
 This section is currently a "braindump" which means I haven't committed to any
 of these improvements, I'm just thinking out loud ;-).
 
+**Interactive merge conflict resolution**
+ Currently ``vcs-tool --merge-up`` will abort as soon as a merge conflict is
+ encountered, which means the user needs to resolve the merge conflict(s) and
+ manually finish merging up (a somewhat involved process that's easy to do
+ wrong). It would be nice to add an interactive mode that asks to resolve merge
+ conflicts before continuing, so that the process of merging up won't be
+ aborted.
+
 **Wildcard matching in configuration files**
  It might be interesting to support shell wildcard matching against local
  directory names to apply a default configuration to a group of repositories?
