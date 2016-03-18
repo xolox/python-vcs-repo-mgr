@@ -259,6 +259,10 @@ Future improvements
 This section is currently a "braindump" which means I haven't committed to any
 of these improvements, I'm just thinking out loud ;-).
 
+**Wildcard matching in configuration files**
+ It might be interesting to support shell wildcard matching against local
+ directory names to apply a default configuration to a group of repositories?
+
 **Enable more extensive customization**
  Right now the version control commands are hard coded and not easy to
  customize for those cases where the existing API gets you 90% of where you
