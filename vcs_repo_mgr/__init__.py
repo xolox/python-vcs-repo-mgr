@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.27.1'
+__version__ = '0.27.2'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -1409,7 +1409,7 @@ class HgRepo(Repository):
     # the `--quiet' option. This explains why I've decided to silence the
     # standard error stream (though I feel I may regret this later).
     commit_command = compact('''
-        hg -R {local} remove --after 2>/dev/null &&
+        hg -R {local} remove --after 2>/dev/null;
         hg -R {local} commit --user={author_combined} --message={message}
     ''')
     export_command = 'hg -R {local} archive --rev={revision} {directory}'
