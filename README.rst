@@ -131,6 +131,21 @@ Command line program to perform common operations (in the context of packaging/d
    changes from the remote repository. This option is used in combination with
    the ``--repository`` option.
    "
+   "``-m``, ``--merge-up``","Merge a change into one or more release branches and the default branch.
+   
+   By default merging starts from the current branch. You can explicitly
+   select the branch where merging should start using the ``--rev``, ``--revision``
+   and ``--release`` options.
+   
+   You can also start by merging a feature branch into the selected release
+   branch before merging the change up through later release branches and the
+   default branch. To do so you pass the name of the feature branch as a
+   positional argument.
+   
+   If the feature branch is located in a different repository you can prefix
+   the location of the repository to the name of the feature branch with a ""#""
+   token in between, to delimit the location from the branch name.
+   "
    "``-e``, ``--export=DIRECTORY``","Export the contents of a specific revision of a repository to a local
    directory. This option is used in combination with the ``--repository`` and
    ``--revision`` options.

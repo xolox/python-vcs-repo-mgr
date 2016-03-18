@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.29'
+__version__ = '0.30'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -778,7 +778,7 @@ class Repository(PropertyManager):
         if global_last_update and self.last_updated >= global_last_update:
             # If an update limit has been enforced we also skip the update.
             return
-        logger.info("Updating %s clone of %s at %s ..", self.friendly_name, remote, self.local)
+        logger.info("Pulling %s updates from %s into %s ..", self.friendly_name, remote, self.local)
         execute(self.get_command(
             method_name='update',
             attribute_name='update_command',
@@ -896,8 +896,11 @@ class Repository(PropertyManager):
                    :attr:`current_branch` are both :data:`None`.
                  - :exc:`~exceptions.ValueError` when the given target branch
                    doesn't exist (based on :attr:`branches`).
+
+        .. note:: Automatically creates the local repository on the first run.
         """
         timer = Timer()
+        was_created = self.create()
         # Validate the target branch or select the default target branch.
         if target_branch:
             if target_branch not in self.branches:
@@ -911,7 +914,8 @@ class Repository(PropertyManager):
         # Make sure we start with a clean working tree.
         self.ensure_clean()
         # Make sure we're up to date with our upstream repository (if any).
-        self.update()
+        if not was_created:
+            self.update()
         # Check out the target branch.
         self.checkout(revision=target_branch)
         # Get the global revision id of the release branch we're about to merge.

@@ -1,7 +1,7 @@
 # Command line interface for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 19, 2015
+# Last Change: March 18, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -99,6 +99,23 @@ Supported options:
     changes from the remote repository. This option is used in combination with
     the --repository option.
 
+  -m, --merge-up
+
+    Merge a change into one or more release branches and the default branch.
+
+    By default merging starts from the current branch. You can explicitly
+    select the branch where merging should start using the --rev, --revision
+    and --release options.
+
+    You can also start by merging a feature branch into the selected release
+    branch before merging the change up through later release branches and the
+    default branch. To do so you pass the name of the feature branch as a
+    positional argument.
+
+    If the feature branch is located in a different repository you can prefix
+    the location of the repository to the name of the feature branch with a `#'
+    token in between, to delimit the location from the branch name.
+
   -e, --export=DIRECTORY
 
     Export the contents of a specific revision of a repository to a local
@@ -151,11 +168,11 @@ def main():
     actions = []
     # Parse the command line arguments.
     try:
-        options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:dnisue:vh', [
+        options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:dnisume:vh', [
             'repository=', 'rev=', 'revision=', 'release=', 'find-directory',
             'find-revision-number', 'find-revision-id', 'list-releases',
             'select-release=', 'sum-revisions', 'vcs-control-field', 'update',
-            'export=', 'verbose', 'help'
+            'merge-up', 'export=', 'verbose', 'help'
         ])
         for option, value in options:
             if option in ('-r', '--repository'):
@@ -197,6 +214,13 @@ def main():
             elif option in ('-u', '--update'):
                 assert repository, "Please specify a repository first!"
                 actions.append(functools.partial(repository.update))
+            elif option in ('-m', '--merge-up'):
+                assert repository, "Please specify a repository first!"
+                actions.append(functools.partial(
+                    repository.merge_up,
+                    target_branch=revision,
+                    feature_branch=arguments[0] if arguments else None,
+                ))
             elif option in ('-e', '--export'):
                 directory = value.strip()
                 assert repository, "Please specify a repository first!"
