@@ -1,8 +1,10 @@
-"""Automated tests for the `vcs-repo-mgr` package."""
-
+# Version control system repository manager.
+#
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 16, 2016
+# Last Change: March 18, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
+
+"""Automated tests for the `vcs-repo-mgr` package."""
 
 # Standard library modules.
 import hashlib
@@ -362,14 +364,19 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                 repository.checkout(revision=tag)
 
     def check_commit_support(self, repository):
-        """Make sure we can make new commits."""
-        logger.info("Testing commit() support ..")
+        """Make sure we can add files and make new commits."""
+        logger.info("Testing add_files() and commit() support ..")
         try:
             # Make sure we start with a clean working tree.
             repository.checkout(clean=True)
-            # Mutate a tracked file in the repository's working tree.
-            self.mutate_working_tree(repository)
-            # Make sure the working tree is no longer clean.
+            # Pick a random filename to add to the repository.
+            file_to_add = random_string()
+            # Create the new file.
+            with open(os.path.join(repository.local, file_to_add), 'w') as handle:
+                handle.write("Testing, 1, 2, 3 ..\n")
+            # Stage the addition of the new file.
+            repository.add_files(file_to_add)
+            # Make sure the working tree is dirty now.
             assert not repository.is_clean
             # Commit the change we made and ensure that commit() actually
             # creates a new revision in the relevant branch.

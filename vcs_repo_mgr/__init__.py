@@ -104,7 +104,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.27.2'
+__version__ = '0.28'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -872,6 +872,39 @@ class Repository(PropertyManager):
             **self.get_author()
         ))
 
+    def add_files(self, *pathnames, **kw):
+        """
+        Stage new files in the working tree to be included in the next commit.
+
+        :param pathnames: Any positional arguments are expected to be pathnames
+                          relative to the root of the repository.
+        :param all: If the keyword argument `all` is :data:`True` then all
+                    new files are added to the repository (in this case no
+                    pathnames should be given).
+        :raises: :exc:`~exceptions.ValueError` when pathnames are given and the
+                 keyword argument `all` is also :data:`True`.
+
+        .. note:: Automatically creates the local repository on the first run.
+        """
+        self.create()
+        add_all = kw.get('all', False)
+        logger.info("Staging working tree changes to be committed in %s ..", self.local)
+        if pathnames and add_all:
+            raise ValueError("You can't add specific pathnames using all=True!")
+        if add_all:
+            execute(self.get_command(
+                method_name='add_files',
+                attribute_name='add_command_all',
+                local=self.local,
+            ))
+        else:
+            execute(self.get_command(
+                method_name='add_files',
+                attribute_name='add_command',
+                local=self.local,
+                filenames=pathnames,
+            ))
+
     def commit(self, message, author=None):
         """
         Commit changes to tracked files in the working tree.
@@ -1403,6 +1436,8 @@ class HgRepo(Repository):
         hg -R {local} commit --user={author_combined} --message={message} --close-branch
     ''')
     merge_command = 'hg -R {local} merge --rev={revision}'
+    add_command = 'hg --cwd {local} addremove {filenames}'
+    add_command_all = 'hg --cwd {local} addremove'
     # The `hg remove --after' command is used to match the semantics of `git
     # commit --all' however `hg remove --after' is _very_ verbose (it comments
     # on every existing file in the repository) and unfortunately it ignores
@@ -1563,6 +1598,8 @@ class GitRepo(Repository):
             -c user.email={author_email}
             merge --no-commit --no-ff {revision}
     ''')
+    add_command = 'cd {local} && git add -- {filenames}'
+    add_command_all = 'cd {local} && git add --all .'
     commit_command = compact('''
         cd {local} && git
             -c user.name={author_name}
