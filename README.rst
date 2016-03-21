@@ -274,6 +274,16 @@ Future improvements
 This section is currently a "braindump" which means I haven't committed to any
 of these improvements, I'm just thinking out loud ;-).
 
+**Improve interactive repository selection**
+ Two improvements for interactive usage of the ``vcs-tool`` program:
+
+ - Automatically load a repository's configuration when a pathname is given
+   that matches an entry in a configuration file (right now you need to give
+   the repository's name in order to load its configuration).
+
+ - Do the obvious thing when no repository is specified on the command line but
+   the working directory matches a configured repository.
+
 **Interactive merge conflict resolution**
  Currently ``vcs-tool --merge-up`` will abort as soon as a merge conflict is
  encountered, which means the user needs to resolve the merge conflict(s) and
