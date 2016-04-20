@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 18, 2016
+# Last Change: April 20, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -82,12 +82,16 @@ import logging
 import operator
 import os
 import re
+import sys
 import tempfile
 import time
 
 # External dependencies.
-from executor import execute, quote
-from humanfriendly import Timer, coerce_boolean, compact, concatenate, format, format_path, parse_path, pluralize
+from executor import ExternalCommandFailed, execute, quote
+from humanfriendly import Timer, coerce_boolean, format_path, parse_path
+from humanfriendly.text import compact, concatenate, format, pluralize, split
+from humanfriendly.prompts import prompt_for_confirmation
+from humanfriendly.terminal import connected_to_terminal
 from natsort import natsort, natsort_key
 from property_manager import PropertyManager, lazy_property, required_property, writable_property
 from six import string_types
@@ -97,6 +101,7 @@ from six.moves import urllib_parse as urlparse
 # Modules included in our package.
 from vcs_repo_mgr.exceptions import (
     AmbiguousRepositoryNameError,
+    MergeConflictError,
     NoMatchingReleasesError,
     NoSuchRepositoryError,
     UnknownRepositoryTypeError,
@@ -104,7 +109,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.30'
+__version__ = '0.31'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -643,6 +648,15 @@ class Repository(PropertyManager):
         raise NotImplementedError()
 
     @property
+    def merge_conflicts(self):
+        """
+        The filenames of any files with merge conflicts (a list of strings).
+
+        The :attr:`merge_conflicts` property needs to be implemented by subclasses.
+        """
+        raise NotImplementedError()
+
+    @property
     def exists(self):
         """:data:`True` if the local clone exists, :data:`False` otherwise."""
         return self.contains_repository(self.local)
@@ -858,19 +872,93 @@ class Repository(PropertyManager):
 
         :param revision: The revision to merge in (a string, defaults to
                          :attr:`default_revision`).
+        :raises: The following exceptions can be raised:
+
+                 - :exc:`~vcs_repo_mgr.exceptions.MergeConflictError` if the
+                   merge command reports an error and merge conflicts are
+                   detected that can't be (or haven't been) resolved
+                   interactively.
+                 - :exc:`~executor.ExternalCommandFailed` if the merge command
+                   reports an error but no merge conflicts are detected.
+
+        Refer to the documentation of :attr:`merge_conflict_handler` if you
+        want to customize the handling of merge conflicts.
 
         .. note:: Automatically creates the local repository on the first run.
         """
         self.create()
         revision = revision or self.default_revision
         logger.info("Merging revision %s in %s ..", revision, self.local)
-        execute(self.get_command(
-            method_name='merge',
-            attribute_name='merge_command',
-            local=self.local,
-            revision=revision,
-            **self.get_author()
-        ))
+        try:
+            execute(self.get_command(
+                method_name='merge',
+                attribute_name='merge_command',
+                local=self.local,
+                revision=revision,
+                **self.get_author()
+            ))
+        except ExternalCommandFailed as e:
+            # Check for merge conflicts.
+            conflicts = self.merge_conflicts
+            if conflicts:
+                # Always warn about merge conflicts and log the relevant filenames.
+                explanation = format("Merge failed due to conflicts in %s! (%s)",
+                                     pluralize(len(conflicts), "file"),
+                                     concatenate(sorted(conflicts)))
+                logger.warning("%s", explanation)
+                if self.merge_conflict_handler(e):
+                    # Trust the operator (or caller) and swallow the exception.
+                    return
+                else:
+                    # Raise a specific exception for merge conflicts.
+                    raise MergeConflictError(explanation)
+            else:
+                # Don't swallow the exception or obscure the traceback
+                # in case we're not `allowed' to handle the exception.
+                raise
+
+    @writable_property
+    def merge_conflict_handler(self):
+        """The merge conflict handler (a callable, defaults to :func:`interactive_merge_conflict_handler()`)."""
+        return self.interactive_merge_conflict_handler
+
+    def interactive_merge_conflict_handler(self, exception):
+        """
+        Give the operator a chance to interactively resolve merge conflicts.
+
+        :param exception: An :exc:`~executor.ExternalCommandFailed` object.
+        :returns: :data:`True` if the operator has interactively resolved any
+                  merge conflicts (and as such the merge error doesn't need to
+                  be propagated), :data:`False` otherwise.
+
+        This method checks whether :data:`sys.stdin` is connected to a terminal
+        to decide whether interaction with an operator is possible. If it is
+        then an interactive terminal prompt is used to ask the operator to
+        resolve the merge conflict(s). If the operator confirms the prompt, the
+        merge error is swallowed instead of propagated. When :data:`sys.stdin`
+        is not connected to a terminal or the operator denies the prompt the
+        merge error is propagated.
+        """
+        if connected_to_terminal(sys.stdin):
+            logger.info(compact("""
+                It seems that I'm connected to a terminal so I'll give you a
+                chance to interactively fix the merge conflict(s) in order to
+                avoid propagating the merge error. Please mark or stage your
+                changes but don't commit the result just yet (it will be done
+                for you).
+            """))
+            while True:
+                if prompt_for_confirmation("Ignore merge error because you've resolved all conflicts?"):
+                    if self.merge_conflicts:
+                        logger.warning("I'm still seeing merge conflicts, please double check! (%s)",
+                                       concatenate(self.merge_conflicts))
+                    else:
+                        # The operator resolved all conflicts.
+                        return True
+                else:
+                    # The operator wants us to propagate the error.
+                    break
+        return False
 
     def merge_up(self, target_branch=None, feature_branch=None, delete=True):
         """
@@ -1644,7 +1732,20 @@ class HgRepo(Repository):
     @property
     def current_branch(self):
         """The name of the branch that's currently checked out in the working tree (a string or :data:`None`)."""
-        return execute('hg', '-R', self.local, 'branch', capture=True, check=False, directory=self.local)
+        return execute('hg', 'branch', capture=True, check=False, directory=self.local)
+
+    @property
+    def merge_conflicts(self):
+        """The filenames of any files with merge conflicts (a list of strings)."""
+        listing = execute('hg', 'resolve', '--list', capture=True, directory=self.local)
+        filenames = set()
+        for line in listing.splitlines():
+            tokens = line.split(None, 1)
+            if len(tokens) == 2:
+                status, name = tokens
+                if status and name and status.upper() != 'R':
+                    filenames.add(name)
+        return sorted(filenames)
 
     @property
     def is_bare(self):
@@ -1821,6 +1922,21 @@ class GitRepo(Repository):
         """The name of the branch that's currently checked out in the working tree (a string or :data:`None`)."""
         output = execute('git', 'rev-parse', '--abbrev-ref', 'HEAD', capture=True, check=False, directory=self.local)
         return output if output != 'HEAD' else None
+
+    @property
+    def merge_conflicts(self):
+        """The filenames of any files with merge conflicts (a list of strings)."""
+        listing = execute('git', 'ls-files', '--unmerged', '-z', capture=True, directory=self.local)
+        filenames = set()
+        for entry in split(listing, '\0'):
+            # The output of `git ls-files --unmerged -z' consists of two
+            # tab-delimited fields per zero-byte terminated record, where the
+            # first field contains metadata and the second field contains the
+            # filename. A single filename can be output more than once.
+            metadata, _, name = entry.partition('\t')
+            if metadata and name:
+                filenames.add(name)
+        return sorted(filenames)
 
     @property
     def is_bare(self):

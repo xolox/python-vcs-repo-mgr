@@ -65,3 +65,13 @@ class WorkingTreeNotCleanError(VcsRepoMgrError):
     encounters a repository whose local working tree contains changes to
     tracked files.
     """
+
+
+class MergeConflictError(VcsRepoMgrError):
+
+    """
+    Exception raised when a merge results in merge conflicts.
+
+    Raised by :func:`~vcs_repo_mgr.Repository.merge()` when it performs a merge
+    that results in merge conflicts.
+    """
