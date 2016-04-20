@@ -109,7 +109,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '0.31'
+__version__ = '0.32'
 
 USER_CONFIG_FILE = os.path.expanduser('~/.vcs-repo-mgr.ini')
 """The absolute pathname of the user-specific configuration file (a string)."""
@@ -134,6 +134,23 @@ execute = functools.partial(execute, logger=logger)
 
 # Dictionary of previously constructed Repository objects.
 loaded_repositories = {}
+
+
+def coerce_feature_branch(value):
+    """
+    Convert a string to a :class:`FeatureBranchSpec` object.
+
+    :param value: A string or :class:`FeatureBranchSpec` object.
+    :returns: A :class:`FeatureBranchSpec` object.
+    """
+    # Repository objects pass through untouched.
+    if isinstance(value, FeatureBranchSpec):
+        return value
+    # We expect a string with a name or URL.
+    if not isinstance(value, string_types):
+        msg = "Expected string or FeatureBranchSpec object as argument, got %s instead!"
+        raise ValueError(msg % type(value))
+    return FeatureBranchSpec(value)
 
 
 def coerce_repository(value):
@@ -968,9 +985,8 @@ class Repository(PropertyManager):
                               the feature branch starts (a string or
                               :data:`None`, defaults to
                               :attr:`current_branch`).
-        :param feature_branch: The feature branch to merge in (a string or
-                               :data:`None`). Strings are parsed using
-                               :class:`FeatureBranchSpec`.
+        :param feature_branch: The feature branch to merge in (any value
+                               accepted by :func:`coerce_feature_branch()`).
         :param delete: :data:`True` (the default) to delete or close the
                        feature branch after it is merged, :data:`False`
                        otherwise.
@@ -998,7 +1014,7 @@ class Repository(PropertyManager):
             if not target_branch:
                 raise TypeError("You need to specify the target branch! (where merging starts)")
         # Parse the feature branch specification.
-        feature_branch = FeatureBranchSpec(feature_branch) if feature_branch else None
+        feature_branch = coerce_feature_branch(feature_branch) if feature_branch else None
         # Make sure we start with a clean working tree.
         self.ensure_clean()
         # Make sure we're up to date with our upstream repository (if any).
