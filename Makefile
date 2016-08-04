@@ -1,12 +1,14 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 16, 2016
+# Last Change: August 4, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
 VIRTUAL_ENV ?= $(WORKON_HOME)/vcs-repo-mgr
-ACTIVATE = . "$(VIRTUAL_ENV)/bin/activate"
+PATH := $(VIRTUAL_ENV)/bin:$(PATH)
+MAKE := $(MAKE) --no-print-directory
+SHELL = bash
 
 default:
 	@echo 'Makefile for vcs-repo-mgr'
@@ -14,42 +16,61 @@ default:
 	@echo 'Usage:'
 	@echo
 	@echo '    make install    install the package in a virtual environment'
-	@echo '    make test       run the test suite and report coverage'
-	@echo '    make check      check the coding style'
+	@echo '    make reset      recreate the virtual environment'
+	@echo '    make check      check coding style (PEP-8, PEP-257)'
+	@echo '    make test       run the test suite, report coverage'
+	@echo '    make tox        run the tests on all Python versions'
+	@echo '    make readme     update usage in readme'
 	@echo '    make docs       update documentation using Sphinx'
 	@echo '    make publish    publish changes to GitHub/PyPI'
 	@echo '    make clean      cleanup all temporary files'
 	@echo
 
 install:
-	test -d "$(VIRTUAL_ENV)" || virtualenv --no-site-packages "$(VIRTUAL_ENV)"
-	test -x "$(VIRTUAL_ENV)/bin/pip" || ($(ACTIVATE) && easy_install pip)
-	test -x "$(VIRTUAL_ENV)/bin/pip-accel" || ($(ACTIVATE) && pip install --quiet pip-accel)
-	$(ACTIVATE) && pip uninstall --quiet --yes vcs-repo-mgr || true
-	$(ACTIVATE) && pip-accel install --quiet --editable .
+	@test -d "$(VIRTUAL_ENV)" || mkdir -p "$(VIRTUAL_ENV)"
+	@test -x "$(VIRTUAL_ENV)/bin/python" || virtualenv --quiet "$(VIRTUAL_ENV)"
+	@test -x "$(VIRTUAL_ENV)/bin/pip" || easy_install pip
+	@test -x "$(VIRTUAL_ENV)/bin/pip-accel" || (pip install --quiet pip-accel && pip-accel install --quiet 'urllib3[secure]')
+	@echo "Updating requirements .." >&2
+	@pip-accel install --quiet --requirement=requirements.txt
+	@which vcs-tool &>/dev/null || pip install --quiet --no-deps --editable .
 
-test: install
-	$(ACTIVATE) && pip-accel install --quiet pytest pytest-cov
-	$(ACTIVATE) && py.test --cov --exitfirst --verbose
-	$(ACTIVATE) && coverage html
+reset:
+	$(MAKE) clean
+	rm -Rf "$(VIRTUAL_ENV)"
+	$(MAKE) install
 
 check: install
-	test -x "$(VIRTUAL_ENV)/bin/flake8" || ($(ACTIVATE) && pip-accel install --quiet flake8-pep257)
-	$(ACTIVATE) && flake8
+	@echo "Updating flake8 .." >&2
+	@pip-accel install --upgrade --quiet --requirement=requirements-checks.txt
+	@flake8
 
-readme:
-	test -x "$(VIRTUAL_ENV)/bin/cog.py" || ($(ACTIVATE) && pip-accel install --quiet cogapp)
-	$(ACTIVATE) && cog.py -r README.rst
+test: install
+	@pip-accel install --quiet coverage pytest pytest-cov
+	@py.test -v --cov --cov-report=html --no-cov-on-fail
+	@coverage report --fail-under=90
 
-docs: install
-	test -x "$(VIRTUAL_ENV)/bin/sphinx-build" || ($(ACTIVATE) && pip-accel install --quiet sphinx)
-	cd docs && make html
+tox: install
+	@pip-accel install --quiet tox && tox
 
-publish:
+readme: install
+	@pip-accel install --quiet cogapp && cog.py -r README.rst
+
+docs: readme
+	@pip-accel install --quiet sphinx
+	cd docs && sphinx-build -nb html -d build/doctrees . build/html
+
+publish: install
 	git push origin && git push --tags origin
-	make clean && python setup.py sdist upload
+	$(MAKE) clean
+	pip-accel install --quiet twine wheel
+	python setup.py sdist bdist_wheel
+	twine upload dist/*
+	$(MAKE) clean
 
 clean:
-	rm -Rf build dist docs/build *.egg-info htmlcov
+	@rm -Rf *.egg .cache .coverage build dist docs/build htmlcov
+	@find -depth -type d -name __pycache__ -exec rm -Rf {} \;
+	@find -type f -name '*.pyc' -delete
 
-.PHONY: default install test check readme docs publish clean
+.PHONY: default install reset check test tox readme docs publish clean
