@@ -4,6 +4,7 @@ python:
   - "2.7"
   - "3.4"
   - "3.5"
+  - "pypy"
 # Install the dependencies of vcs-repo-mgr before running the test suite.
 before_install:
   - sudo apt-get update -qq
