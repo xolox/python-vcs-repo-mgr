@@ -63,8 +63,8 @@ docs: readme
 publish: install
 	git push origin && git push --tags origin
 	$(MAKE) clean
-	pip-accel install --quiet twine
-	python setup.py sdist
+	pip-accel install --quiet twine wheel
+	python setup.py sdist bdist_wheel
 	twine upload dist/*
 	$(MAKE) clean
 

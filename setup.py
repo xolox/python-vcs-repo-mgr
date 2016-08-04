@@ -7,13 +7,16 @@
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
-Setup script for the ``vcs-repo-mgr`` package.
+Setup script for the `vcs-repo-mgr` package.
 
 **python setup.py install**
   Install from the working directory into the current Python environment.
 
 **python setup.py sdist**
   Build a source distribution archive.
+
+**python setup.py bdist_wheel**
+  Build a wheel distribution archive.
 """
 
 # Standard library modules.
@@ -24,6 +27,19 @@ import sys
 
 # De-facto standard solution for Python packaging.
 from setuptools import find_packages, setup
+
+PYTHON_TWO_DEPS = ['bzr >= 2.6.0', 'mercurial >= 2.9']
+"""
+The `vcs-repo-mgr` package depends on Bazaar and Mercurial which don't support
+Python 3 (at the time of writing) while `vcs-repo-mgr` does support Python 3.
+
+On the one hand it's nice to pull in recent versions of these dependencies as
+installation requirements when possible, it definitely shouldn't make it
+impossible to install `vcs-repo-mgr` under Python 3. Because of this the Bazaar
+and Mercurial dependencies are conditional; users that are running Python 3 are
+expected to install Bazaar and/or Mercurial via e.g. their system package
+manager.
+"""
 
 
 def get_contents(*args):
@@ -37,6 +53,24 @@ def get_version(*args):
     contents = get_contents(*args)
     metadata = dict(re.findall('__([a-z]+)__ = [\'"]([^\'"]+)', contents))
     return metadata['version']
+
+
+def get_install_requires():
+    """Add conditional dependencies for Python 2 (when creating source distributions)."""
+    install_requires = get_requirements('requirements.txt')
+    if 'bdist_wheel' not in sys.argv:
+        if sys.version_info[0] == 2:
+            install_requires.extend(PYTHON_TWO_DEPS)
+    return sorted(install_requires)
+
+
+def get_extras_require():
+    """Add conditional dependencies for Python 2 (when creating wheel distributions)."""
+    extras_require = {}
+    if have_environment_marker_support():
+        expression = ':python_version == "2.6" or python_version == "2.7"'
+        extras_require[expression] = list(PYTHON_TWO_DEPS)
+    return extras_require
 
 
 def get_requirements(*args):
@@ -57,26 +91,20 @@ def get_absolute_path(*args):
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), *args)
 
 
-# Fill in the "install_requires" field based on requirements.txt.
-requirements = get_requirements('requirements.txt')
+def have_environment_marker_support():
+    """
+    Check whether setuptools has support for PEP-426 environment marker support.
 
-# The vcs-repo-mgr package depends on Mercurial however Mercurial doesn't
-# support Python 3.x while vcs-repo-mgr does support Python 3.x. Because most
-# users will be using Python 2.x in the foreseeable future I've decided to be
-# pragmatic about things and turn Mercurial into a conditional dependency.
-# See also: http://mercurial.selenic.com/wiki/SupportedPythonVersions
-#
-# TODO Make this compatible with binary wheels.
-if sys.version_info[0] == 2:
-    requirements.append('bzr >= 2.6.0')
-    requirements.append('mercurial >= 2.9')
-else:
-    # If Mercurial is not included in the Python requirements then it should at
-    # least be included in the Debian package dependencies.
-    with open(get_absolute_path('stdeb.cfg'), 'w') as handle:
-        handle.write('[vcs-repo-mgr]\n')
-        handle.write('Depends: bzr, git | git-core, mercurial\n')
-        handle.write('XS-Python-Version: >= 2.6\n')
+    Based on the ``setup.py`` script of the ``pytest`` package:
+    https://bitbucket.org/pytest-dev/pytest/src/default/setup.py
+    """
+    try:
+        from pkg_resources import parse_version
+        from setuptools import __version__
+        return parse_version(__version__) >= parse_version('0.7.2')
+    except Exception:
+        return False
+
 
 setup(name='vcs-repo-mgr',
       version=get_version('vcs_repo_mgr', '__init__.py'),
@@ -89,7 +117,8 @@ setup(name='vcs-repo-mgr',
       entry_points=dict(console_scripts=[
           'vcs-tool = vcs_repo_mgr.cli:main',
       ]),
-      install_requires=get_requirements('requirements.txt'),
+      install_requires=get_install_requires(),
+      extras_require=get_extras_require(),
       test_suite='vcs_repo_mgr.tests',
       classifiers=[
           'Development Status :: 5 - Production/Stable',
