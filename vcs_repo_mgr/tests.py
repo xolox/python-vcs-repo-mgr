@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 18, 2016
+# Last Change: October 25, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Automated tests for the `vcs-repo-mgr` package."""
@@ -25,6 +25,7 @@ from six.moves import StringIO
 # The module we're testing.
 import vcs_repo_mgr
 from vcs_repo_mgr import (
+    BzrRepo,
     GitRepo,
     HgRepo,
     UPDATE_VARIABLE,
@@ -339,6 +340,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.check_commit_support(cloned_repo)
         self.check_branch_support(cloned_repo)
         self.check_merge_up_support(cloned_repo)
+        self.check_push_support(cloned_repo, source_repo)
 
     def clone_repo(self, repository, **kw):
         """Clone a repository object."""
@@ -491,6 +493,30 @@ class VcsRepoMgrTestCase(unittest.TestCase):
             repository.checkout()
             entries = os.listdir(absolute_directory)
             assert all('v%i' % i in entries for i in range(1, num_branches + 1))
+        except NotImplementedError as e:
+            logger.warning("%s", e)
+
+    def check_push_support(self, cloned_repo, source_repo):
+        """Check whether changes can be pushed from one repository to another."""
+        try:
+            # Sanity check (in a simplistic and naive way) that downstream
+            # contains more change sets than upstream.
+            downstream_commits = cloned_repo.find_revision_number(cloned_repo.default_revision)
+            upstream_commits = source_repo.find_revision_number(source_repo.default_revision)
+            if downstream_commits > upstream_commits:
+                # Push the changes from downstream to upstream.
+                cloned_repo.push(remote=source_repo.local)
+                # Make sure the commit was propagated from downstream to upstream.
+                downstream_commits = cloned_repo.find_revision_number(cloned_repo.default_revision)
+                upstream_commits = source_repo.find_revision_number(cloned_repo.default_revision)
+                assert downstream_commits <= upstream_commits
+            else:
+                # The Bazaar support in vcs-repo-mgr is lacking features needed
+                # by the test suite to create new commits, hence there will be
+                # no difference between the two repositories and we can't test
+                # push() support.
+                assert isinstance(cloned_repo, BzrRepo)
+                assert isinstance(source_repo, BzrRepo)
         except NotImplementedError as e:
             logger.warning("%s", e)
 

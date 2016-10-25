@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: October 25, 2016
+# Last Change: October 26, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -56,6 +56,7 @@ Python API (`vcs-repo-mgr`)         Bazaar             Git                    Me
 ==================================  =================  =====================  =========
 :func:`Repository.create()`         bzr branch         git clone              hg clone
 :func:`Repository.update()`         bzr pull           git fetch              hg pull
+:func:`Repository.push()`           bzr push           git push               hg push
 :func:`Repository.checkout()`       (not implemented)  git checkout           hg update
 :func:`Repository.commit()`         (not implemented)  git commit             hg commit
 :func:`Repository.create_branch()`  (not implemented)  git checkout -b        hg branch
@@ -820,6 +821,33 @@ class Repository(PropertyManager):
                 remote=remote,
             ))
             self.mark_updated()
+
+    def push(self, remote=None):
+        """
+        Push changes from the local repository to a remote repository.
+
+        :param remote: Overrides the value of :attr:`remote` for the duration
+                       of the call to :func:`push()`.
+        :raises: :exc:`~executor.ExternalCommandFailed` if the command fails.
+
+        .. warning:: Depending on the version control backend the push command
+                     may fail when there are no changes to push. No attempt has
+                     been made to make this behavior consistent between
+                     implementations (although the thought has crossed my
+                     mind and I'll likely revisit this in the future).
+        """
+        remote = remote or self.remote
+        if not remote:
+            # If there's no remote there's nothing we can do!
+            logger.debug("Skipping push because there's no remote.")
+        else:
+            logger.info("Pushing %s updates from %s to %s ..", self.friendly_name, self.local, remote)
+            execute(self.get_command(
+                method_name='push',
+                attribute_name='push_command',
+                local=self.local,
+                remote=remote,
+            ))
 
     def checkout(self, revision=None, clean=False):
         """
@@ -1705,6 +1733,7 @@ class HgRepo(Repository):
     create_command = 'hg clone --noupdate {remote} {local}'
     create_command_non_bare = 'hg clone {remote} {local}'
     update_command = 'hg -R {local} pull {remote}'
+    push_command = 'hg -R {local} push --new-branch {remote}'
     checkout_command = 'hg -R {local} update --rev={revision}'
     checkout_command_clean = 'hg -R {local} update --rev={revision} --clean'
     create_branch_command = 'hg -R {local} branch {branch_name}'
@@ -1878,6 +1907,7 @@ class GitRepo(Repository):
     create_command = 'git clone --bare {remote} {local}'
     create_command_non_bare = 'git clone {remote} {local}'
     update_command = 'cd {local} && git fetch {remote} +refs/heads/*:refs/heads/*'
+    push_command = 'cd {local} && git push {remote} && git push --tags {remote}'
     checkout_command = 'cd {local} && git checkout {revision}'
     checkout_command_clean = 'cd {local} && git checkout . && git checkout {revision}'
     create_branch_command = 'cd {local} && git checkout -b {branch_name}'
@@ -2080,6 +2110,7 @@ class BzrRepo(Repository):
     create_command = 'bzr branch --no-tree --use-existing-dir {remote} {local}'
     create_command_non_bare = 'bzr branch --use-existing-dir {remote} {local}'
     update_command = 'cd {local} && bzr pull {remote}'
+    push_command = 'cd {local} && bzr push {remote}'
     export_command = 'cd {local} && bzr export --revision={revision} {directory}'
 
     @staticmethod
