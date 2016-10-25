@@ -307,6 +307,16 @@ of these improvements, I'm just thinking out loud ;-).
  and Mercurial_ repositories. To be honest I'm not sure this is worth the
  effort, I find myself working with Bazaar repositories less and less.
 
+**Refactor test suite**
+ The test suite started out based on clones of external repositories, simply
+ because I lacked the means to create new repositories and make new commits yet
+ needed repositories with existing commits to test against.
+
+ Since then I never revisited this structure and the test suite has become a
+ tangled mess of methods being called in the right order, dependent on each
+ other's side effects. I should definitely revisit this and attempt to isolate
+ all of these tests into separate test methods that don't depend on each other.
+
 Known issues
 ------------
 
