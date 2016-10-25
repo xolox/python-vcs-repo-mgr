@@ -1,7 +1,7 @@
 # Makefile for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 4, 2016
+# Last Change: October 26, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 WORKON_HOME ?= $(HOME)/.virtualenvs
@@ -41,9 +41,7 @@ reset:
 	$(MAKE) install
 
 check: install
-	@echo "Updating flake8 .." >&2
-	@pip-accel install --upgrade --quiet --requirement=requirements-checks.txt
-	@flake8
+	@scripts/check-code-style.sh
 
 test: install
 	@pip-accel install --quiet coverage pytest pytest-cov
