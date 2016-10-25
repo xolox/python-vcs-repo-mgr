@@ -800,25 +800,26 @@ class Repository(PropertyManager):
         .. note:: Automatically creates the local repository on the first run.
         """
         remote = remote or self.remote
+        update_limit = int(os.environ.get(UPDATE_VARIABLE, '0'))
         if not remote:
-            # If there is no remote configured, there's nothing we can do!
-            return
-        if self.create(remote=remote):
+            # If there's no remote there's nothing we can do!
+            logger.debug("Skipping update (pull) because there's no remote.")
+        elif self.create(remote=remote):
             # If the local clone didn't exist yet and we just created it,
             # we can skip the update (since there's no point).
-            return
-        global_last_update = int(os.environ.get(UPDATE_VARIABLE, '0'))
-        if global_last_update and self.last_updated >= global_last_update:
+            logger.debug("Skipping update (pull) because local repository was just created.")
+        elif update_limit and self.last_updated >= update_limit:
             # If an update limit has been enforced we also skip the update.
-            return
-        logger.info("Pulling %s updates from %s into %s ..", self.friendly_name, remote, self.local)
-        execute(self.get_command(
-            method_name='update',
-            attribute_name='update_command',
-            local=self.local,
-            remote=remote,
-        ))
-        self.mark_updated()
+            logger.debug("Skipping update (pull) due to update limit.")
+        else:
+            logger.info("Pulling %s updates from %s into %s ..", self.friendly_name, remote, self.local)
+            execute(self.get_command(
+                method_name='update',
+                attribute_name='update_command',
+                local=self.local,
+                remote=remote,
+            ))
+            self.mark_updated()
 
     def checkout(self, revision=None, clean=False):
         """
