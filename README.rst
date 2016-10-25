@@ -9,9 +9,8 @@ vcs-repo-mgr: Version control repository manager
 
 The Python package `vcs-repo-mgr` provides a command line program and Python
 API to perform common operations (in the context of packaging/deployment) on
-`version control`_ repositories. It's currently tested on cPython 2.6, 2.7, 3.4
-and 3.5 and PyPy (2.7). Bazaar_, Mercurial_ and Git_ repositories are currently
-supported.
+`version control`_ repositories. It's currently tested on Python 2.6, 2.7, 3.4
+and 3.5. Bazaar_, Mercurial_ and Git_ repositories are supported.
 
 .. contents::
    :local:
@@ -307,6 +306,43 @@ of these improvements, I'm just thinking out loud ;-).
  Try to bring Bazaar_ support up to par with the features supported for Git_
  and Mercurial_ repositories. To be honest I'm not sure this is worth the
  effort, I find myself working with Bazaar repositories less and less.
+
+Known issues
+------------
+
+This section documents known issues that users may run into.
+
+Problematic dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Bazaar and Mercurial are both written in Python and available on PyPI and as
+such I included them in the installation requirements of `vcs-repo-mgr`,
+because I couldn't think of a good reason not to.
+
+Adding support for Python 3 to `vcs-repo-mgr` made things more complicated
+because Bazaar and Mercurial didn't support Python 3, leading to installation
+errors. To cope with this problem the Bazaar and Mercurial requirements were
+made conditional on the Python version:
+
+- On Python 2 the Bazaar and Mercurial packages would be installed together
+  with `vcs-repo-mgr`.
+
+- On Python 3 the user was instead responsible for making sure that Bazaar and
+  Mercurial were installed (for example using system packages).
+
+This works fine because `vcs-repo-mgr` only invokes Bazaar and Mercurial using
+the command line interfaces so it doesn't matter whether the version control
+system is using the same version of Python as `vcs-repo-mgr`.
+
+Since then the installation of the Bazaar package has started failing on PyPy,
+unfortunately this time there is no reliable and backwards compatible way to
+make the Bazaar dependency optional in wheel distributions `due to bugs in
+setuptools <https://github.com/html5lib/html5lib-python/issues/231#issuecomment-224022399>`_.
+
+When I investigated support for environment markers that match Python
+implementations (refer to the link above) I decided that instead of writing a
+setup script full of nasty and fragile hacks I'd rather just drop official
+(tested) support for PyPy, as silly as the reason for it may be.
 
 Contact
 -------

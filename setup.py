@@ -3,7 +3,7 @@
 # Setup script for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 4, 2016
+# Last Change: October 25, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -136,8 +136,6 @@ setup(name='vcs-repo-mgr',
           'Programming Language :: Python :: 3',
           'Programming Language :: Python :: 3.4',
           'Programming Language :: Python :: 3.5',
-          'Programming Language :: Python :: Implementation :: CPython',
-          'Programming Language :: Python :: Implementation :: PyPy',
           'Topic :: Software Development :: Libraries :: Python Modules',
           'Topic :: Software Development :: Version Control',
           'Topic :: System :: Archiving :: Packaging',
