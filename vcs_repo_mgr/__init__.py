@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 4, 2016
+# Last Change: October 25, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -768,6 +768,7 @@ class Repository(PropertyManager):
                        of the call to :func:`create()`.
         :returns: :data:`True` if the repository was just created,
                   :data:`False` if it already existed.
+        :raises: :exc:`~executor.ExternalCommandFailed` if the command fails.
 
         It's not an error if the repository already exists.
         """
@@ -791,6 +792,7 @@ class Repository(PropertyManager):
 
         :param remote: Overrides the value of :attr:`remote` for the duration
                        of the call to :func:`update()`.
+        :raises: :exc:`~executor.ExternalCommandFailed` if the command fails.
 
         If used in combination with :class:`limit_vcs_updates` this won't
         perform redundant updates.
@@ -826,6 +828,7 @@ class Repository(PropertyManager):
                          :attr:`default_revision`).
         :param clean: If :data:`True` any changes in the working tree are
                       discarded (defaults to :data:`False`).
+        :raises: :exc:`~executor.ExternalCommandFailed` if the command fails.
 
         .. note:: Automatically creates the local repository on the first run.
         """
@@ -844,6 +847,7 @@ class Repository(PropertyManager):
         Create a new branch based on the working tree's revision.
 
         :param branch_name: The name of the branch to create (a string).
+        :raises: :exc:`~executor.ExternalCommandFailed` if the command fails.
 
         This method automatically checks out the new branch, but note that the
         new branch may not actually exist until a commit has been made on the
@@ -868,6 +872,7 @@ class Repository(PropertyManager):
         :param message: The message to use when closing the branch requires a
                         commit (a string or :data:`None`). Defaults to "Closing
                         branch NAME".
+        :raises: :exc:`~executor.ExternalCommandFailed` if the command fails.
 
         .. note:: Automatically creates the local repository on the first run.
         """
@@ -1000,6 +1005,7 @@ class Repository(PropertyManager):
                    :attr:`current_branch` are both :data:`None`.
                  - :exc:`~exceptions.ValueError` when the given target branch
                    doesn't exist (based on :attr:`branches`).
+                 - :exc:`~executor.ExternalCommandFailed` if a command fails.
 
         .. note:: Automatically creates the local repository on the first run.
         """
@@ -1083,8 +1089,12 @@ class Repository(PropertyManager):
         :param all: If the keyword argument `all` is :data:`True` then all
                     new files are added to the repository (in this case no
                     pathnames should be given).
-        :raises: :exc:`~exceptions.ValueError` when pathnames are given and the
-                 keyword argument `all` is also :data:`True`.
+        :raises: The following exceptions can be raised:
+
+                 - :exc:`~exceptions.ValueError` when pathnames are given and
+                   the keyword argument `all` is also :data:`True`.
+
+                 - :exc:`~executor.ExternalCommandFailed` if the command fails.
 
         .. note:: Automatically creates the local repository on the first run.
         """
@@ -1115,6 +1125,7 @@ class Repository(PropertyManager):
         :param author: Override the value of :attr:`author` (a string). If
                        :attr:`author` is :data:`None` this argument is
                        required.
+        :raises: :exc:`~executor.ExternalCommandFailed` if the command fails.
 
         .. note:: Automatically creates the local repository on the first run.
         """
@@ -1136,6 +1147,7 @@ class Repository(PropertyManager):
                           string).
         :param revision: The revision to export (a string, defaults to
                          :attr:`default_revision`).
+        :raises: :exc:`~executor.ExternalCommandFailed` if the command fails.
 
         .. note:: Automatically creates the local repository on the first run.
         """
