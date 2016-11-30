@@ -3,7 +3,7 @@
 # Setup script for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: October 25, 2016
+# Last Change: November 30, 2016
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -27,6 +27,9 @@ import sys
 
 # De-facto standard solution for Python packaging.
 from setuptools import find_packages, setup
+
+PY2 = (sys.version_info[0] == 2)
+""":data:`True` on Python 2, :data:`False` otherwise."""
 
 PYTHON_TWO_DEPS = ['bzr >= 2.6.0', 'mercurial >= 2.9']
 """
@@ -58,9 +61,8 @@ def get_version(*args):
 def get_install_requires():
     """Add conditional dependencies for Python 2 (when creating source distributions)."""
     install_requires = get_requirements('requirements.txt')
-    if 'bdist_wheel' not in sys.argv:
-        if sys.version_info[0] == 2:
-            install_requires.extend(PYTHON_TWO_DEPS)
+    if PY2 and 'bdist_wheel' not in sys.argv:
+        install_requires.extend(PYTHON_TWO_DEPS)
     return sorted(install_requires)
 
 
@@ -104,6 +106,15 @@ def have_environment_marker_support():
         return parse_version(__version__) >= parse_version('0.7.2')
     except Exception:
         return False
+
+
+# When our installation requirements include Bazaar and Mercurial it is silly
+# to also require the Bazaar and Mercurial system packages through stdeb.cfg
+# so we overwrite the file to remove these dependencies.
+if PY2:
+    with open(get_absolute_path('stdeb.cfg'), 'w') as handle:
+        handle.write('[vcs-repo-mgr]\n')
+        handle.write('Depends: git | git-core\n')
 
 
 setup(name='vcs-repo-mgr',
