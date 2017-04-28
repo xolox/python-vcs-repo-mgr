@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: October 25, 2016
+# Last Change: April 3, 2017
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Automated tests for the `vcs-repo-mgr` package."""
@@ -712,16 +712,16 @@ class EnsureNewCommit(object):
 
 def call(*arguments):
     """Helper to call the command line interface from the current Python process."""
-    saved_stdout = sys.stdout
     saved_argv = sys.argv
+    saved_stdout = sys.stdout
     try:
-        sys.stdout = StringIO()
         sys.argv = [sys.argv[0]] + list(arguments)
+        sys.stdout = StringIO()
         main()
         return sys.stdout.getvalue()
     finally:
-        sys.stdout = saved_stdout
         sys.argv = saved_argv
+        sys.stdout = saved_stdout
 
 
 def random_string(length=25):
