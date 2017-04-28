@@ -1,4 +1,4 @@
-coloredlogs >= 0.5
+coloredlogs >= 6.1
 executor >= 1.2
 humanfriendly >= 1.44.4
 naturalsort >= 1.3

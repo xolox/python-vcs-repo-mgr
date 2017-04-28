@@ -72,8 +72,7 @@ Command line program to perform common operations (in the context of packaging/d
    Alternatively the location of a remote repository can be given. The
    location should be prefixed by the type of the repository (with a ""+"" in
    between) unless the location ends in "".git"" in which case the prefix is
-   optional.
-   "
+   optional."
    "``--rev``, ``--revision=REVISION``","Select a revision to operate on. Accepts any string that's supported by the
    VCS system that manages the repository, which means you can provide branch
    names, tag names, exact revision ids, etc. This option is used in
@@ -82,8 +81,7 @@ Command line program to perform common operations (in the context of packaging/d
    
    If this option is not provided a default revision is selected: ""last:1"" for
    Bazaar repositories, ""master"" for git repositories and ""default"" (not
-   ""tip""!) for Mercurial repositories.
-   "
+   ""tip""!) for Mercurial repositories."
    ``--release=RELEASE_ID``,"Select a release to operate on. This option works in the same way as the
    ``--revision`` option. Please refer to the vcs-repo-mgr documentation for
    details on ""releases"".
@@ -91,28 +89,23 @@ Command line program to perform common operations (in the context of packaging/d
    Although release identifiers are based on branch or tag names they
    may not correspond literally, this is why the release identifier you
    specify here is translated to a global revision id before being passed to
-   the VCS system.
-   "
+   the VCS system."
    "``-n``, ``--find-revision-number``","Print the local revision number (an integer) of the revision given with the
    ``--revision`` option. Revision numbers are useful as a build number or when a
    simple, incrementing version number is required. Revision numbers should
    not be used to unambiguously refer to a revision (use revision ids for that
    instead). This option is used in combination with the ``--repository`` and
-   ``--revision`` options.
-   "
+   ``--revision`` options."
    "``-i``, ``--find-revision-id``","Print the global revision id (a string) of the revision given with the
    ``--revision`` option. Global revision ids are useful to unambiguously refer to
    a revision. This option is used in combination with the ``--repository`` and
-   ``--revision`` options.
-   "
+   ``--revision`` options."
    ``--list-releases``,"Print the identifiers of the releases in the repository given with the
    ``--repository`` option. The release identifiers are printed on standard
-   output (one per line), ordered using natural order comparison.
-   "
+   output (one per line), ordered using natural order comparison."
    ``--select-release=RELEASE_ID``,"Print the identifier of the newest release that is not newer than
    ``RELEASE_ID`` in the repository given with the ``--repository`` option.
-   The release identifier is printed on standard output.
-   "
+   The release identifier is printed on standard output."
    "``-s``, ``--sum-revisions``","Print the summed revision numbers of multiple repository/revision pairs.
    The repository/revision pairs are taken from the positional arguments to
    vcs-repo-mgr.
@@ -120,17 +113,14 @@ Command line program to perform common operations (in the context of packaging/d
    This is useful when you're building a package based on revisions from
    multiple VCS repositories. By taking changes in all repositories into
    account when generating version numbers you can make sure that your version
-   number is bumped with every single change.
-   "
+   number is bumped with every single change."
    ``--vcs-control-field``,"Print a line containing a Debian control file field and value. The field
    name will be one of ""Vcs-Bzr"", ""Vcs-Hg"" or ""Vcs-Git"". The value will be the
    repository's remote location and the selected revision (separated by a ""#""
-   character).
-   "
+   character)."
    "``-u``, ``--update``","Create/update the local clone of a remote repository by pulling the latest
    changes from the remote repository. This option is used in combination with
-   the ``--repository`` option.
-   "
+   the ``--repository`` option."
    "``-m``, ``--merge-up``","Merge a change into one or more release branches and the default branch.
    
    By default merging starts from the current branch. You can explicitly
@@ -144,17 +134,14 @@ Command line program to perform common operations (in the context of packaging/d
    
    If the feature branch is located in a different repository you can prefix
    the location of the repository to the name of the feature branch with a ""#""
-   token in between, to delimit the location from the branch name.
-   "
+   token in between, to delimit the location from the branch name."
    "``-e``, ``--export=DIRECTORY``","Export the contents of a specific revision of a repository to a local
    directory. This option is used in combination with the ``--repository`` and
-   ``--revision`` options.
-   "
+   ``--revision`` options."
    "``-d``, ``--find-directory``","Print the absolute pathname of a local repository. This option is used in
-   combination with the ``--repository`` option.
-   "
-   "``-v``, ``--verbose``","Make more noise.
-   "
+   combination with the ``--repository`` option."
+   "``-v``, ``--verbose``",Increase logging verbosity (can be repeated).
+   "``-q``, ``--quiet``",Decrease logging verbosity (can be repeated).
    "``-h``, ``--help``","Show this message and exit.
    "
 

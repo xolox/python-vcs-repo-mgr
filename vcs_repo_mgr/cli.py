@@ -1,7 +1,7 @@
 # Command line interface for vcs-repo-mgr.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 18, 2016
+# Last Change: April 29, 2017
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -129,7 +129,11 @@ Supported options:
 
   -v, --verbose
 
-    Make more noise.
+    Increase logging verbosity (can be repeated).
+
+  -q, --quiet
+
+    Decrease logging verbosity (can be repeated).
 
   -h, --help
 
@@ -145,6 +149,7 @@ import sys
 # External dependencies.
 import coloredlogs
 from executor import execute
+from humanfriendly.terminal import usage, warning
 
 # Modules included in our package.
 from vcs_repo_mgr import coerce_repository, sum_revision_numbers
@@ -157,9 +162,7 @@ execute = functools.partial(execute, logger=logger)
 
 
 def main():
-    """
-    The command line interface of the ``vcs-tool`` command.
-    """
+    """The command line interface of the ``vcs-tool`` program."""
     # Initialize logging to the terminal.
     coloredlogs.install()
     # Command line option defaults.
@@ -168,11 +171,11 @@ def main():
     actions = []
     # Parse the command line arguments.
     try:
-        options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:dnisume:vh', [
+        options, arguments = getopt.gnu_getopt(sys.argv[1:], 'r:dnisume:vqh', [
             'repository=', 'rev=', 'revision=', 'release=', 'find-directory',
             'find-revision-number', 'find-revision-id', 'list-releases',
             'select-release=', 'sum-revisions', 'vcs-control-field', 'update',
-            'merge-up', 'export=', 'verbose', 'help'
+            'merge-up', 'export=', 'verbose', 'quiet', 'help',
         ])
         for option, value in options:
             if option in ('-r', '--repository'):
@@ -183,6 +186,12 @@ def main():
                 revision = value.strip()
                 assert revision, "Please specify a nonempty revision string!"
             elif option == '--release':
+                # TODO Right now --release and --merge-up cannot be combined
+                #      because the following statements result in a global
+                #      revision id which is immutable. If release objects had
+                #      something like an optional `mutable_revision_id' it
+                #      should be possible to support the combination of
+                #      --release and --merge-up.
                 assert repository, "Please specify a repository first!"
                 release_id = value.strip()
                 assert release_id in repository.releases, "The given release identifier is invalid!"
@@ -228,16 +237,16 @@ def main():
                 actions.append(functools.partial(repository.export, directory, revision))
             elif option in ('-v', '--verbose'):
                 coloredlogs.increase_verbosity()
+            elif option in ('-q', '--quiet'):
+                coloredlogs.decrease_verbosity()
             elif option in ('-h', '--help'):
-                usage()
+                usage(__doc__)
                 return
         if not actions:
-            usage()
+            usage(__doc__)
             return
     except Exception as e:
-        logger.error(e)
-        print('')
-        usage()
+        warning("Error: %s", e)
         sys.exit(1)
     # Execute the requested action(s).
     try:
@@ -281,8 +290,3 @@ def print_summed_revisions(arguments):
 def print_vcs_control_field(repository, revision):
     """Report the VCS control field for the given repository and revision to standard output."""
     print("%s: %s" % repository.generate_control_field(revision))
-
-
-def usage():
-    """Report the usage message to standard output."""
-    print(__doc__.strip())
