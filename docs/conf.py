@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Documentation build configuration file for the `vcs-repo-mgr` package."""
 
 import os
@@ -65,9 +63,9 @@ pygments_style = 'sphinx'
 # Refer to the Python standard library.
 # From: http://twistedmatrix.com/trac/ticket/4582.
 intersphinx_mapping = {
-    'python': ('https://docs.python.org', None),
-    'executor': ('https://executor.readthedocs.org/en/latest', None),
-    'propertymanager': ('https://property-manager.readthedocs.org/en/latest', None),
+    'python': ('https://docs.python.org/2', None),
+    'executor': ('https://executor.readthedocs.io/en/latest', None),
+    'propertymanager': ('https://property-manager.readthedocs.io/en/latest', None),
 }
 
 # -- Options for HTML output ---------------------------------------------------
@@ -78,9 +76,3 @@ html_theme = 'nature'
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'vcsrepomgrdoc'
-
-
-def setup(app):
-    """Based on http://stackoverflow.com/a/5599712/788200."""
-    app.connect('autodoc-skip-member', (lambda app, what, name, obj, skip, options:
-                                        False if name == '__init__' else skip))
