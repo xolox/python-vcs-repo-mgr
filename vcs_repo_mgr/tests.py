@@ -23,9 +23,11 @@ from humanfriendly.testing import TestCase, random_string, run_cli
 import vcs_repo_mgr
 from vcs_repo_mgr import (
     BzrRepo,
+    FeatureBranchSpec,
     GitRepo,
     HgRepo,
     UPDATE_VARIABLE,
+    coerce_feature_branch,
     coerce_repository,
     find_configured_repository,
     limit_vcs_updates,
@@ -119,7 +121,7 @@ class VcsRepoMgrTestCase(TestCase):
                           release_scheme='tags',
                           release_filter='regex with multiple (capture) (groups)')
 
-    def test_repository_coercion(self):
+    def test_coerce_repository(self):
         """
         Test that auto vivification of repositories is supported.
         """
@@ -135,6 +137,18 @@ class VcsRepoMgrTestCase(TestCase):
         self.assertRaises(ValueError, coerce_repository, '%s+with-a-plus-in-the-middle' % OUR_PUBLIC_REPO)
         # Test that Repository objects pass through untouched.
         assert repository is coerce_repository(repository)
+
+    def test_coerce_feature_branch(self):
+        """Test that feature branch coercion works correctly."""
+        # Test that invalid arguments raise the intended exception.
+        self.assertRaises(ValueError, coerce_feature_branch, None)
+        # Test the coercion of a feature branch expression to a FeatureBranchSpec object.
+        instance = coerce_feature_branch('https://github.com/xolox/python-vcs-repo-mgr#dev')
+        assert isinstance(instance, FeatureBranchSpec)
+        assert instance.location == 'https://github.com/xolox/python-vcs-repo-mgr'
+        assert instance.revision == 'dev'
+        # Test that FeatureBranchSpec objects pass through untouched.
+        assert coerce_feature_branch(instance) is instance
 
     def test_command_line_interface(self):
         """
