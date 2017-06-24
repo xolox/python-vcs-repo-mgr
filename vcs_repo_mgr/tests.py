@@ -184,7 +184,7 @@ class VcsRepoMgrTestCase(TestCase):
         assert os.path.join(export_directory, 'setup.py')
         assert os.path.join(export_directory, 'verboselogs.py')
         # Test the --list-releases option.
-        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--list-releases').splitlines()
+        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--list-releases')
         listing_of_releases = output.splitlines()
         for expected_release_tag in ['0.1', '0.4.2', '0.8.20', '0.19.3']:
             assert expected_release_tag in listing_of_releases
