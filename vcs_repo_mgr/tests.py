@@ -16,7 +16,7 @@ import shutil
 import tempfile
 
 # External dependencies.
-from executor import ExternalCommandFailed
+from executor import ExternalCommandFailed, execute
 from humanfriendly.testing import TestCase, random_string, run_cli
 
 # The module we're testing.
@@ -130,13 +130,20 @@ class VcsRepoMgrTestCase(TestCase):
         # Test auto vivification of git repositories.
         repository = coerce_repository(OUR_PUBLIC_REPO)
         assert '0.5' in repository.tags
-        # Test auto vivification of other repositories.
+        # Test auto vivification of Mercurial repositories.
         repository = coerce_repository('hg+%s' % REMOTE_HG_REPO)
         assert isinstance(repository, HgRepo)
         # Test that type prefix parsing swallows UnknownRepositoryTypeError.
         self.assertRaises(ValueError, coerce_repository, '%s+with-a-plus-in-the-middle' % OUR_PUBLIC_REPO)
         # Test that Repository objects pass through untouched.
         assert repository is coerce_repository(repository)
+        # Test that the repository type of an existing local clone can be inferred.
+        for vcs_type, init_cmd in ((GitRepo, 'git init'),
+                                   (HgRepo, 'hg init')):
+            directory = create_temporary_directory()
+            execute(*(init_cmd.split() + [directory]))
+            repository = coerce_repository(directory)
+            assert isinstance(repository, vcs_type)
 
     def test_coerce_feature_branch(self):
         """Test that feature branch coercion works correctly."""
