@@ -17,7 +17,7 @@ import tempfile
 
 # External dependencies.
 from executor import ExternalCommandFailed, execute
-from humanfriendly.testing import TestCase, random_string, run_cli
+from humanfriendly.testing import PatchedItem, TestCase, random_string, run_cli
 
 # The module we're testing.
 import vcs_repo_mgr
@@ -195,11 +195,11 @@ class VcsRepoMgrTestCase(TestCase):
         # the environment variable which makes the update limiting work in
         # stacked contexts).
         bogus_update_variable_value = '42'
-        os.environ[UPDATE_VARIABLE] = bogus_update_variable_value
-        with limit_vcs_updates():
-            run_cli(main, '--repository=test', '--update')
-            run_cli(main, '--repository=test', '--update')
-        assert os.environ[UPDATE_VARIABLE] == bogus_update_variable_value
+        with PatchedItem(os.environ, UPDATE_VARIABLE, bogus_update_variable_value):
+            with limit_vcs_updates():
+                run_cli(main, '--repository=test', '--update')
+                run_cli(main, '--repository=test', '--update')
+            assert os.environ[UPDATE_VARIABLE] == bogus_update_variable_value
         # Test the --export option.
         export_directory = os.path.join(create_temporary_directory(), 'non-existing-subdirectory')
         run_cli(main, '--repository=test', '--revision=master', '--export=%s' % export_directory)
