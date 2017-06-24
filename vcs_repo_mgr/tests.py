@@ -140,15 +140,15 @@ class VcsRepoMgrTestCase(TestCase):
 
     def test_coerce_feature_branch(self):
         """Test that feature branch coercion works correctly."""
-        # Test that invalid arguments raise the intended exception.
+        # Test argument type checking.
         self.assertRaises(ValueError, coerce_feature_branch, None)
         # Test the coercion of a feature branch expression to a FeatureBranchSpec object.
-        instance = coerce_feature_branch('https://github.com/xolox/python-vcs-repo-mgr#dev')
-        assert isinstance(instance, FeatureBranchSpec)
-        assert instance.location == 'https://github.com/xolox/python-vcs-repo-mgr'
-        assert instance.revision == 'dev'
+        feature_branch = coerce_feature_branch('https://github.com/xolox/python-vcs-repo-mgr#dev')
+        assert isinstance(feature_branch, FeatureBranchSpec)
+        assert feature_branch.location == 'https://github.com/xolox/python-vcs-repo-mgr'
+        assert feature_branch.revision == 'dev'
         # Test that FeatureBranchSpec objects pass through untouched.
-        assert coerce_feature_branch(instance) is instance
+        assert feature_branch is coerce_feature_branch(feature_branch)
 
     def test_command_line_interface(self):
         """
