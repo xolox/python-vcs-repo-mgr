@@ -220,6 +220,19 @@ class VcsRepoMgrTestCase(TestCase):
         assert output.strip() == '125'
         # An uneven number of arguments should report an error.
         returncode, output = run_cli(main, '--sum-revisions', 'test', '1.0', 'second')
+        assert returncode != 0
+
+    def test_author_handling(self):
+        """Test get_author()."""
+        repo = GitRepo(remote=REMOTE_GIT_REPO, author=None)
+        # Test that get_author() complains when no author details are available.
+        self.assertRaises(ValueError, repo.get_author)
+        # Test that get_author() complains when the author details can't be parsed.
+        self.assertRaises(ValueError, repo.get_author, 'Peter')
+        # Test that get_author() correctly parses the expected author details format.
+        details = repo.get_author('Peter Odding <peter@peterodding.com>')
+        assert details['author_name'] == 'Peter Odding'
+        assert details['author_email'] == 'peter@peterodding.com'
 
     def test_hg_repo(self):
         """
