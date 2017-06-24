@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: April 3, 2017
+# Last Change: June 24, 2017
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Automated tests for the `vcs-repo-mgr` package."""
@@ -13,14 +13,10 @@ import os
 import random
 import re
 import shutil
-import string
-import sys
 import tempfile
-import unittest
 
 # External dependencies.
-import coloredlogs
-from six.moves import StringIO
+from humanfriendly.testing import TestCase, random_string, run_cli
 
 # The module we're testing.
 import vcs_repo_mgr
@@ -93,19 +89,9 @@ def tearDownModule():
         shutil.rmtree(directory)
 
 
-class VcsRepoMgrTestCase(unittest.TestCase):
+class VcsRepoMgrTestCase(TestCase):
 
     """Container for the `vcs-repo-mgr` test suite."""
-
-    def __init__(self, *args, **kw):
-        """
-        Initialize the test suite.
-        """
-        # Initialize super classes.
-        super(VcsRepoMgrTestCase, self).__init__(*args, **kw)
-        # Set up logging to the terminal.
-        coloredlogs.install()
-        coloredlogs.set_level(logging.DEBUG)
 
     def test_argument_checking(self):
         """
@@ -140,65 +126,78 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertRaises(ValueError, coerce_repository, None)
         # Test auto vivification of git repositories.
         repository = coerce_repository(OUR_PUBLIC_REPO)
-        self.assertTrue('0.5' in repository.tags)
+        assert '0.5' in repository.tags
         # Test auto vivification of other repositories.
         repository = coerce_repository('hg+%s' % REMOTE_HG_REPO)
-        self.assertTrue(isinstance(repository, HgRepo))
+        assert isinstance(repository, HgRepo)
         # Test that type prefix parsing swallows UnknownRepositoryTypeError.
         self.assertRaises(ValueError, coerce_repository, '%s+with-a-plus-in-the-middle' % OUR_PUBLIC_REPO)
         # Test that Repository objects pass through untouched.
-        self.assertTrue(repository is coerce_repository(repository))
+        assert repository is coerce_repository(repository)
 
     def test_command_line_interface(self):
         """
         Test the command line interface.
         """
         # The usage of --help should work (we can't actually validate the output of course).
-        call('--help')
+        returncode, output = run_cli(main, '--help', merged=True)
+        assert returncode == 0
+        assert "Usage:" in output
         # The usage of invalid repository names should raise an error.
-        self.assertRaises(SystemExit, call, '--repository=non-existing', '--find-directory')
+        returncode, output = run_cli(main, '--repository=non-existing', '--find-directory')
+        assert returncode != 0
         # Create a temporary named repository for the purpose of running the test suite.
         repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
         # Test the --revision and --find-revision-number option.
-        self.assertTrue(DIGITS_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-number')))
+        returncode, output = run_cli(main, '--repository=test', '--revision=master', '--find-revision-number')
+        assert returncode == 0
+        assert DIGITS_PATTERN.match(output)
         # Test the --revision and --find-revision-id option.
-        self.assertTrue(HEX_SUM_PATTERN.match(call('--repository=test', '--revision=master', '--find-revision-id')))
+        returncode, output = run_cli(main, '--repository=test', '--revision=master', '--find-revision-id')
+        assert returncode == 0
+        assert HEX_SUM_PATTERN.match(output)
         # Test the --release option (the literal given on the right hand side
         # was manually verified to correspond to the 0.19 tag.
-        self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--release=0.19', '--find-revision-id').strip(),
-                         'c70d28908e4f43341dcbdccc5a478348bf9b1488')
+        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--release=0.19', '--find-revision-id')
+        assert returncode == 0
+        assert output.strip() == 'c70d28908e4f43341dcbdccc5a478348bf9b1488'
         # Test the --vcs-control-field option.
-        self.assertTrue(VCS_FIELD_PATTERN.match(call('--repository=test', '--vcs-control-field')))
+        returncode, output = run_cli(main, '--repository=test', '--vcs-control-field')
+        assert returncode == 0
+        assert VCS_FIELD_PATTERN.match(output)
         # Test the --find-directory option.
-        self.assertEqual(call('--repository=test', '--find-directory', '--verbose').strip(), repository.local)
+        returncode, output = run_cli(main, '--repository=test', '--find-directory', '--verbose')
+        assert returncode == 0
+        assert output.strip() == repository.local
         # Test the limiting of repository updates (and the saving/restoring of
         # the environment variable which makes the update limiting work in
         # stacked contexts).
         bogus_update_variable_value = '42'
         os.environ[UPDATE_VARIABLE] = bogus_update_variable_value
         with limit_vcs_updates():
-            call('--repository=test', '--update')
-            call('--repository=test', '--update')
-        self.assertEqual(os.environ[UPDATE_VARIABLE], bogus_update_variable_value)
+            run_cli(main, '--repository=test', '--update')
+            run_cli(main, '--repository=test', '--update')
+        assert os.environ[UPDATE_VARIABLE] == bogus_update_variable_value
         # Test the --export option.
         export_directory = os.path.join(create_temporary_directory(), 'non-existing-subdirectory')
-        call('--repository=test', '--revision=master', '--export=%s' % export_directory)
-        self.assertTrue(os.path.join(export_directory, 'setup.py'))
-        self.assertTrue(os.path.join(export_directory, 'verboselogs.py'))
+        run_cli(main, '--repository=test', '--revision=master', '--export=%s' % export_directory)
+        assert os.path.join(export_directory, 'setup.py')
+        assert os.path.join(export_directory, 'verboselogs.py')
         # Test the --list-releases option.
-        listing_of_releases = call('--repository=%s' % PIP_ACCEL_REPO, '--list-releases').splitlines()
+        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--list-releases').splitlines()
+        listing_of_releases = output.splitlines()
         for expected_release_tag in ['0.1', '0.4.2', '0.8.20', '0.19.3']:
-            self.assertTrue(expected_release_tag in listing_of_releases)
+            assert expected_release_tag in listing_of_releases
 
     def test_revision_number_summing(self):
         """
         Test summing of local revision numbers.
         """
         self.create_repo_using_config('git', REMOTE_GIT_REPO, 'hg', REMOTE_HG_REPO)
-        output = call('--sum-revisions', 'test', '1.0', 'second', '1.2')
-        self.assertEqual(output.strip(), '125')
+        returncode, output = run_cli(main, '--sum-revisions', 'test', '1.0', 'second', '1.2')
+        assert output.strip() == '125'
         # An uneven number of arguments should report an error.
-        self.assertRaises(SystemExit, call, '--sum-revisions', 'test', '1.0', 'second')
+        returncode, output = run_cli(main, '--sum-revisions', 'test', '1.0', 'second')
 
     def test_hg_repo(self):
         """
@@ -220,25 +219,25 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test HgRepo.update().
         repository.update()
         # Test repr(HgRepo).
-        self.assertTrue(isinstance(repr(repository), str))
+        assert isinstance(repr(repository), str)
         # Test HgRepo.branches
         self.validate_all_revisions(repository.branches)
-        self.assertTrue('trunk' in repository.branches)
+        assert 'trunk' in repository.branches
         # Test HgRepo.tags.
         self.validate_all_revisions(repository.tags)
         for tag_name in ['tip', '1.2', '1.3.4', '1.4.9', '1.5.2']:
-            self.assertTrue(tag_name in repository.tags)
+            assert tag_name in repository.tags
         assert repository.tags['1.5'].revision_number > repository.tags['1.2'].revision_number
         # Test HgRepo.find_revision_id().
-        self.assertTrue(repository.find_revision_id('1.2').startswith('ffa882669ca9'))
+        assert repository.find_revision_id('1.2').startswith('ffa882669ca9')
         # Test HgRepo.find_revision_number().
-        self.assertEqual(repository.find_revision_number('1.2'), 124)
+        assert repository.find_revision_number('1.2') == 124
         # Test HgRepo.export().
         export_directory = create_temporary_directory()
         repository.export(revision='1.2', directory=export_directory)
         # Make sure the contents were properly exported.
-        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
-        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'virtualenv.py')))
+        assert os.path.isfile(os.path.join(export_directory, 'setup.py'))
+        assert os.path.isfile(os.path.join(export_directory, 'virtualenv.py'))
 
     def test_git_repo(self):
         """
@@ -257,23 +256,23 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test GitRepo.update().
         repository.update()
         # Test repr(GitRepo).
-        self.assertTrue(isinstance(repr(repository), str))
+        assert isinstance(repr(repository), str)
         # Test GitRepo.branches
         self.validate_all_revisions(repository.branches)
-        self.assertTrue('master' in repository.branches)
+        assert 'master' in repository.branches
         # Test GitRepo.tags.
         self.validate_all_revisions(repository.tags)
-        self.assertTrue('1.0' in repository.tags)
-        self.assertTrue('1.0.1' in repository.tags)
+        assert '1.0' in repository.tags
+        assert '1.0.1' in repository.tags
         assert repository.tags['1.0.1'].revision_number > repository.tags['1.0'].revision_number
         # Test GitRepo.find_revision_id().
-        self.assertEqual(repository.find_revision_id('1.0'), 'f6b89e5314d951bba4aa876ddbeef1deeb18932c')
+        assert repository.find_revision_id('1.0') == 'f6b89e5314d951bba4aa876ddbeef1deeb18932c'
         # Test GitRepo.export().
         export_directory = create_temporary_directory()
         repository.export(revision='1.0', directory=export_directory)
         # Make sure the contents were properly exported.
-        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
-        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'verboselogs.py')))
+        assert os.path.isfile(os.path.join(export_directory, 'setup.py'))
+        assert os.path.isfile(os.path.join(export_directory, 'verboselogs.py'))
 
     def test_bzr_repo(self):
         """
@@ -292,23 +291,23 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Test BzrRepo.update().
         repository.update()
         # Test repr(BzrRepo).
-        self.assertTrue(isinstance(repr(repository), str))
+        assert isinstance(repr(repository), str)
         # Test BzrRepo.branches.
         self.validate_all_revisions(repository.branches)
         # Test BzrRepo.tags.
         self.validate_all_revisions(repository.tags, id_pattern=re.compile(r'^\S+$'))
-        self.assertTrue('0.7.9' in repository.tags)
-        self.assertTrue('0.8.9' in repository.tags)
-        self.assertTrue('0.9.3.9' in repository.tags)
+        assert '0.7.9' in repository.tags
+        assert '0.8.9' in repository.tags
+        assert '0.9.3.9' in repository.tags
         assert repository.tags['0.8.9'].revision_number > repository.tags['0.7.9'].revision_number
         # Test BzrRepo.find_revision_id().
-        self.assertEqual(repository.find_revision_id('0.8.9'), 'git-v1:e2e4d3dd3dc2a41469f5d559cbdb5ca6c5057f01')
+        assert repository.find_revision_id('0.8.9') == 'git-v1:e2e4d3dd3dc2a41469f5d559cbdb5ca6c5057f01'
         # Test BzrRepo.export().
         export_directory = create_temporary_directory()
         repository.export(revision='0.7.9', directory=export_directory)
         # Make sure the contents were properly exported.
-        self.assertTrue(os.path.isfile(os.path.join(export_directory, 'setup.py')))
-        self.assertTrue(os.path.isdir(os.path.join(export_directory, 'apt')))
+        assert os.path.isfile(os.path.join(export_directory, 'setup.py'))
+        assert os.path.isdir(os.path.join(export_directory, 'apt'))
 
     def check_working_tree_support(self, source_repo, file_to_change='setup.py'):
         """Shared logic to check working tree support."""
@@ -539,10 +538,10 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         Test creation and ordering of Release objects.
         """
         repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
-        self.assertTrue(len(repository.releases) > 0)
+        assert len(repository.releases) > 0
         for identifier, release in repository.releases.items():
-            self.assertEqual(identifier, release.identifier)
-            self.assertEqual(release.identifier, release.revision.tag)
+            assert identifier == release.identifier
+            assert release.identifier == release.revision.tag
 
     def test_revision_ordering(self):
         """
@@ -559,8 +558,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         # Regular sorting would screw up the order of the following two
         # examples so this is testing that the natural order sorting of tags
         # works as expected (Do What I Mean :-).
-        self.assertTrue(find_tag_index('0.2') < find_tag_index('0.10'))
-        self.assertTrue(find_tag_index('0.18') < find_tag_index('0.20'))
+        assert find_tag_index('0.2') < find_tag_index('0.10')
+        assert find_tag_index('0.18') < find_tag_index('0.20')
 
         def find_release_index(looking_for_release):
             for i, release in enumerate(repository.ordered_releases):
@@ -568,8 +567,8 @@ class VcsRepoMgrTestCase(unittest.TestCase):
                     return i
             raise Exception("Failed to find tag by name!")
 
-        self.assertTrue(find_release_index('0.2') < find_release_index('0.10'))
-        self.assertTrue(find_release_index('0.18') < find_release_index('0.20'))
+        assert find_release_index('0.2') < find_release_index('0.10')
+        assert find_release_index('0.18') < find_release_index('0.20')
 
     def test_release_selection(self):
         """
@@ -579,11 +578,15 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         "business logic" as well as the command line interface.
         """
         # Exact matches should always be honored (obviously :-).
-        self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.2').strip(), '0.2')
+        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.2')
+        assert returncode == 0
+        assert output.strip() == '0.2'
         # If e.g. a major.minor.PATCH release is not available, the release
         # immediately below that should be selected (in this case: same
         # major.minor but different PATCH level).
-        self.assertEqual(call('--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.19.5').strip(), '0.19.3')
+        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.19.5')
+        assert returncode == 0
+        assert output.strip() == '0.19.3'
         # Instantiate a repository for tests that can't be done through the CLI.
         repository = coerce_repository(PIP_ACCEL_REPO)
         # If no releases are available a known and documented exception should
@@ -591,7 +594,7 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         self.assertRaises(NoMatchingReleasesError, repository.select_release, '0.0.1')
         # Release objects should support repr().
         release = repository.select_release('0.2')
-        self.assertTrue(isinstance(repr(release), str))
+        assert isinstance(repr(release), str)
 
     def test_factory_deduplication(self):
         """
@@ -604,10 +607,10 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         a = coerce_repository(PIP_ACCEL_REPO)
         b = coerce_repository(PIP_ACCEL_REPO)
         c = coerce_repository(OUR_PUBLIC_REPO)
-        self.assertTrue(a is b)
+        assert a is b
         # Test our assumption about the `is' operator as well :-).
-        self.assertTrue(a is not c)
-        self.assertTrue(b is not c)
+        assert a is not c
+        assert b is not c
 
     def create_repo_using_config(self, repository_type, remote_location,
                                  second_repository_type=None,
@@ -668,9 +671,9 @@ class VcsRepoMgrTestCase(unittest.TestCase):
         """
         Perform some generic sanity checks on :class:`Revision` objects.
         """
-        self.assertTrue(revision.revision_number > 0)
-        self.assertTrue(isinstance(repr(revision), str))
-        self.assertTrue(id_pattern.match(revision.revision_id))
+        assert revision.revision_number > 0
+        assert isinstance(repr(revision), str)
+        assert id_pattern.match(revision.revision_id)
 
     def validate_all_revisions(self, mapping, **kw):
         """
@@ -708,22 +711,3 @@ class EnsureNewCommit(object):
         if exc_type is None:
             new_id = self.repository.find_revision_id(revision=self.branch_name)
             assert new_id != self.old_id
-
-
-def call(*arguments):
-    """Helper to call the command line interface from the current Python process."""
-    saved_argv = sys.argv
-    saved_stdout = sys.stdout
-    try:
-        sys.argv = [sys.argv[0]] + list(arguments)
-        sys.stdout = StringIO()
-        main()
-        return sys.stdout.getvalue()
-    finally:
-        sys.argv = saved_argv
-        sys.stdout = saved_stdout
-
-
-def random_string(length=25):
-    """Generate a random string."""
-    return ''.join(random.choice(string.ascii_letters) for i in range(length))

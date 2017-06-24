@@ -56,7 +56,9 @@ command line interface is described below.
 
 **Usage:** `vcs-tool [OPTIONS] [ARGS]`
 
-Command line program to perform common operations (in the context of packaging/deployment) on version control repositories. Supports Bazaar, Mercurial and Git repositories.
+Command line program to perform common operations (in the context of
+packaging/deployment) on version control repositories. Supports Bazaar,
+Mercurial and Git repositories.
 
 **Supported options:**
 
@@ -142,8 +144,7 @@ Command line program to perform common operations (in the context of packaging/d
    combination with the ``--repository`` option."
    "``-v``, ``--verbose``",Increase logging verbosity (can be repeated).
    "``-q``, ``--quiet``",Decrease logging verbosity (can be repeated).
-   "``-h``, ``--help``","Show this message and exit.
-   "
+   "``-h``, ``--help``",Show this message and exit.
 
 .. [[[end]]]
 
