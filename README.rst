@@ -283,28 +283,6 @@ of these improvements, I'm just thinking out loud ;-).
  possible through subclassing, but a more lightweight solution would
  certainly be nice to have :-).
 
-**Switch to executor.contexts**
- Switch to executor.contexts_ for external command execution to enable
- dependency injection of command execution contexts. I haven't really
- investigated how complex the switch will be. It might be possible to somehow
- combine the above point (enable customization) and this point (dependency
- injection) but I'm not yet sure what that would look like.
-
-**Extend Bazaar support**
- Try to bring Bazaar_ support up to par with the features supported for Git_
- and Mercurial_ repositories. To be honest I'm not sure this is worth the
- effort, I find myself working with Bazaar repositories less and less.
-
-**Refactor test suite**
- The test suite started out based on clones of external repositories, simply
- because I lacked the means to create new repositories and make new commits yet
- needed repositories with existing commits to test against.
-
- Since then I never revisited this structure and the test suite has become a
- tangled mess of methods being called in the right order, dependent on each
- other's side effects. I should definitely revisit this and attempt to isolate
- all of these tests into separate test methods that don't depend on each other.
-
 Known issues
 ------------
 

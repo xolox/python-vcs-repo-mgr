@@ -1,761 +1,988 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: June 24, 2017
+# Last Change: July 2, 2017
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
-"""Automated tests for the `vcs-repo-mgr` package."""
+"""Test suite for the `vcs-repo-mgr` package."""
 
 # Standard library modules.
-import hashlib
+import codecs
 import logging
 import os
-import random
 import re
-import shutil
-import tempfile
+import time
 
 # External dependencies.
-from executor import ExternalCommandFailed, execute
-from humanfriendly.testing import PatchedItem, TestCase, random_string, run_cli
+from humanfriendly import parse_path
+from humanfriendly.testing import (
+    MockedHomeDirectory,
+    TemporaryDirectory,
+    TestCase,
+    random_string,
+    run_cli,
+)
+from mock import MagicMock
+from six import string_types
 
 # The module we're testing.
-import vcs_repo_mgr
 from vcs_repo_mgr import (
-    BzrRepo,
+    Author,
     FeatureBranchSpec,
-    GitRepo,
-    HgRepo,
-    UPDATE_VARIABLE,
+    Release,
+    Remote,
+    USER_CONFIG_FILE,
+    coerce_author,
     coerce_feature_branch,
+    coerce_pattern,
     coerce_repository,
     find_configured_repository,
     limit_vcs_updates,
+    sum_revision_numbers,
 )
+from vcs_repo_mgr.backends.bzr import BzrRepo
+from vcs_repo_mgr.backends.git import GitRepo
+from vcs_repo_mgr.backends.hg import HgRepo
+from vcs_repo_mgr.cli import main
 from vcs_repo_mgr.exceptions import (
     AmbiguousRepositoryNameError,
+    MergeConflictError,
     NoMatchingReleasesError,
     NoSuchRepositoryError,
     UnknownRepositoryTypeError,
     WorkingTreeNotCleanError,
 )
-from vcs_repo_mgr.cli import main
+
+AUTHOR_NAME = 'John Doe'
+AUTHOR_EMAIL = 'john.doe@example.com'
+AUTHOR_COMBINED = '%s <%s>' % (AUTHOR_NAME, AUTHOR_EMAIL)
 
 # Initialize a logger.
 logger = logging.getLogger(__name__)
 
-# Locations of remote repositories.
-REMOTE_BZR_REPO = 'lp:python-apt'
-REMOTE_GIT_REPO = 'https://github.com/xolox/python-verboselogs.git'
-REMOTE_HG_REPO = 'https://bitbucket.org/ianb/virtualenv'
-OUR_PUBLIC_REPO = 'https://github.com/xolox/python-vcs-repo-mgr.git'
-PIP_ACCEL_REPO = 'https://github.com/paylogic/pip-accel.git'
 
-# We need these in multiple places.
-DIGITS_PATTERN = re.compile('^[0-9]+$')
-HEX_SUM_PATTERN = re.compile('^[A-Fa-f0-9]+$')
-VCS_FIELD_PATTERN = re.compile('Vcs-Git: %s#[A-Fa-f0-9]+$' % re.escape(REMOTE_GIT_REPO))
-
-# Global state of the test suite.
-TEMPORARY_DIRECTORIES = []
-LOCAL_CHECKOUTS = {}
-
-
-def create_temporary_directory():
-    """
-    Create a temporary directory.
-
-    The directory will be cleaned up when the test suite is torn down.
-    """
-    temporary_directory = tempfile.mkdtemp()
-    TEMPORARY_DIRECTORIES.append(temporary_directory)
-    return temporary_directory
-
-
-def create_local_checkout(remote):
-    """
-    Create a directory for a local checkout of a remote repository.
-    """
-    context = hashlib.sha1()
-    context.update(remote.encode('utf-8'))
-    key = context.hexdigest()
-    if key not in LOCAL_CHECKOUTS:
-        LOCAL_CHECKOUTS[key] = create_temporary_directory()
-    return LOCAL_CHECKOUTS[key]
-
-
-def tearDownModule():
-    """
-    Clean up temporary directories.
-    """
-    for directory in TEMPORARY_DIRECTORIES:
-        shutil.rmtree(directory)
+def prepare_config(config):
+    """Prepare the ``~/.vcs-repo-mgr.ini`` configuration file."""
+    with open(parse_path(USER_CONFIG_FILE), 'w') as handle:
+        for name, options in config.items():
+            handle.write('[%s]\n' % name)
+            for key, value in options.items():
+                handle.write('%s = %s\n' % (key, value))
 
 
 class VcsRepoMgrTestCase(TestCase):
 
-    """Container for the `vcs-repo-mgr` test suite."""
+    """Unit tests for the common functionality in `vcs-repo-mgr`."""
 
-    def test_argument_checking(self):
-        """
-        Test that subclasses of :class:`Repository` raise an exception on:
+    def test_cli_usage(self):
+        """Test the command line interface's usage message."""
+        for arguments in [], ['-h'], ['--help']:
+            returncode, output = run_cli(main, *arguments)
+            self.assertEquals(returncode, 0)
+            assert "Usage: vcs-tool" in output
 
-        - Non-existing local directories when no remote location is given.
-        - Invalid release schemes.
-        - Invalid release filters.
-        """
-        non_existing_repo = os.path.join(tempfile.gettempdir(),
-                                         'vcs-repo-mgr',
-                                         'non-existing-repo-%i' % random.randint(0, 1000))
-        self.assertRaises(ValueError, GitRepo)
-        self.assertRaises(ValueError, GitRepo, local=non_existing_repo)
-        self.assertRaises(ValueError,
-                          GitRepo,
-                          local=non_existing_repo,
-                          remote=REMOTE_GIT_REPO,
-                          release_scheme='not-tags-and-not-branches')
-        self.assertRaises(ValueError,
-                          GitRepo,
-                          local=non_existing_repo,
-                          remote=REMOTE_GIT_REPO,
-                          release_scheme='tags',
-                          release_filter='regex with multiple (capture) (groups)')
-
-    def test_coerce_repository(self):
-        """
-        Test that auto vivification of repositories is supported.
-        """
-        # Test argument type checking.
-        self.assertRaises(ValueError, coerce_repository, None)
-        # Test auto vivification of git repositories.
-        repository = coerce_repository(OUR_PUBLIC_REPO)
-        assert '0.5' in repository.tags
-        # Test auto vivification of Mercurial repositories.
-        repository = coerce_repository('hg+%s' % REMOTE_HG_REPO)
-        assert isinstance(repository, HgRepo)
-        # Test that type prefix parsing swallows UnknownRepositoryTypeError.
-        self.assertRaises(ValueError, coerce_repository, '%s+with-a-plus-in-the-middle' % OUR_PUBLIC_REPO)
-        # Test that Repository objects pass through untouched.
-        assert repository is coerce_repository(repository)
-        # Test that the repository type of an existing local clone can be inferred.
-        for vcs_type, init_cmd in ((GitRepo, 'git init'),
-                                   (HgRepo, 'hg init')):
-            directory = create_temporary_directory()
-            execute(*(init_cmd.split() + [directory]))
-            repository = coerce_repository(directory)
-            assert isinstance(repository, vcs_type)
+    def test_coerce_author(self):
+        """Test :func:`vcs_repo_mgr.coerce_author()`."""
+        # Make sure an exception is raised on invalid types.
+        self.assertRaises(ValueError, coerce_author, None)
+        # Make sure an exception is raised on invalid string values.
+        self.assertRaises(ValueError, coerce_author, AUTHOR_NAME)
+        # Create an Author object by parsing a string.
+        author = coerce_author(AUTHOR_COMBINED)
+        assert isinstance(author, Author)
+        # Check the parsed components.
+        assert author.name == AUTHOR_NAME
+        assert author.email == AUTHOR_EMAIL
+        assert author.combined == AUTHOR_COMBINED
+        # Make sure Author objects pass through untouched.
+        assert author is coerce_author(author)
 
     def test_coerce_feature_branch(self):
-        """Test that feature branch coercion works correctly."""
-        # Test argument type checking.
+        """Test :func:`vcs_repo_mgr.coerce_feature_branch()`."""
+        # Make sure an exception is raised on invalid types.
         self.assertRaises(ValueError, coerce_feature_branch, None)
-        # Test the coercion of a feature branch expression to a FeatureBranchSpec object.
+        # Create a FeatureBranchSpec object by parsing a string.
         feature_branch = coerce_feature_branch('https://github.com/xolox/python-vcs-repo-mgr#dev')
         assert isinstance(feature_branch, FeatureBranchSpec)
+        # Check the parsed components.
         assert feature_branch.location == 'https://github.com/xolox/python-vcs-repo-mgr'
         assert feature_branch.revision == 'dev'
-        # Test that FeatureBranchSpec objects pass through untouched.
+        # Make sure FeatureBranchSpec objects pass through untouched.
         assert feature_branch is coerce_feature_branch(feature_branch)
 
-    def test_command_line_interface(self):
-        """
-        Test the command line interface.
-        """
-        # The usage of --help should work (we can't actually validate the output of course).
-        returncode, output = run_cli(main, '--help', merged=True)
-        assert returncode == 0
-        assert "Usage:" in output
-        # The usage of invalid repository names should raise an error.
-        returncode, output = run_cli(main, '--repository=non-existing', '--find-directory')
-        assert returncode != 0
-        # Create a temporary named repository for the purpose of running the test suite.
-        repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
-        # Test the --revision and --find-revision-number option.
-        returncode, output = run_cli(main, '--repository=test', '--revision=master', '--find-revision-number')
-        assert returncode == 0
-        assert DIGITS_PATTERN.match(output)
-        # Test the --revision and --find-revision-id option.
-        returncode, output = run_cli(main, '--repository=test', '--revision=master', '--find-revision-id')
-        assert returncode == 0
-        assert HEX_SUM_PATTERN.match(output)
-        # Test the --release option (the literal given on the right hand side
-        # was manually verified to correspond to the 0.19 tag.
-        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--release=0.19', '--find-revision-id')
-        assert returncode == 0
-        assert output.strip() == 'c70d28908e4f43341dcbdccc5a478348bf9b1488'
-        # Test the --vcs-control-field option.
-        returncode, output = run_cli(main, '--repository=test', '--vcs-control-field')
-        assert returncode == 0
-        assert VCS_FIELD_PATTERN.match(output)
-        # Test the --find-directory option.
-        returncode, output = run_cli(main, '--repository=test', '--find-directory', '--verbose')
-        assert returncode == 0
-        assert output.strip() == repository.local
-        # Test the limiting of repository updates (and the saving/restoring of
-        # the environment variable which makes the update limiting work in
-        # stacked contexts).
-        bogus_update_variable_value = '42'
-        with PatchedItem(os.environ, UPDATE_VARIABLE, bogus_update_variable_value):
-            with limit_vcs_updates():
-                run_cli(main, '--repository=test', '--update')
-                run_cli(main, '--repository=test', '--update')
-            assert os.environ[UPDATE_VARIABLE] == bogus_update_variable_value
-        # Test the --export option.
-        export_directory = os.path.join(create_temporary_directory(), 'non-existing-subdirectory')
-        run_cli(main, '--repository=test', '--revision=master', '--export=%s' % export_directory)
-        assert os.path.join(export_directory, 'setup.py')
-        assert os.path.join(export_directory, 'verboselogs.py')
-        # Test the --list-releases option.
-        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--list-releases')
-        listing_of_releases = output.splitlines()
-        for expected_release_tag in ['0.1', '0.4.2', '0.8.20', '0.19.3']:
-            assert expected_release_tag in listing_of_releases
+    def test_coerce_pattern(self):
+        """Test :func:`vcs_repo_mgr.coerce_pattern()`."""
+        pattern = re.compile('')
+        # Make sure strings are converted to compiled regular expression patterns.
+        assert isinstance(coerce_pattern('foobar'), type(pattern))
+        # Make sure compiled regular expressions pass through untouched.
+        assert pattern is coerce_pattern(pattern)
 
-    def test_revision_number_summing(self):
-        """
-        Test summing of local revision numbers.
-        """
-        self.create_repo_using_config('git', REMOTE_GIT_REPO, 'hg', REMOTE_HG_REPO)
-        returncode, output = run_cli(main, '--sum-revisions', 'test', '1.0', 'second', '1.2')
-        assert output.strip() == '125'
-        # An uneven number of arguments should report an error.
-        returncode, output = run_cli(main, '--sum-revisions', 'test', '1.0', 'second')
-        assert returncode != 0
+    def test_coerce_repository(self):
+        """Test :func:`vcs_repo_mgr.coerce_repository()`."""
+        # Test argument type checking.
+        self.assertRaises(ValueError, coerce_repository, None)
+        # Test that Repository objects pass through untouched.
+        with TemporaryDirectory() as directory:
+            repository = GitRepo(local=directory)
+            assert repository is coerce_repository(repository)
+        # Test that a version control type can be prefixed
+        # to the location of a repository using a plus.
+        for prefix, vcs_type in (('bzr', BzrRepo), ('git', GitRepo), ('hg', HgRepo)):
+            with TemporaryDirectory() as directory:
+                location = '%s+%s' % (prefix, directory)
+                assert isinstance(coerce_repository(location), vcs_type)
+        # Test that version control type prefix parsing swallows
+        # UnknownRepositoryTypeError (due to "unexpected plusses").
+        self.assertRaises(ValueError, coerce_repository, 'definitely+not+as+expected')
+        # Test that locations ending with `.git' are recognized.
+        with TemporaryDirectory() as directory:
+            location = '%s/test.git' % directory
+            assert isinstance(coerce_repository(location), GitRepo)
 
-    def test_author_handling(self):
-        """Test get_author()."""
-        repo = GitRepo(remote=REMOTE_GIT_REPO, author=None)
-        # Test that get_author() complains when no author details are available.
-        self.assertRaises(ValueError, repo.get_author)
-        # Test that get_author() complains when the author details can't be parsed.
-        self.assertRaises(ValueError, repo.get_author, 'Peter')
-        # Test that get_author() correctly parses the expected author details format.
-        details = repo.get_author('Peter Odding <peter@peterodding.com>')
-        assert details['author_name'] == 'Peter Odding'
-        assert details['author_email'] == 'peter@peterodding.com'
+    def test_default_local(self):
+        """Test default locations of local repositories."""
+        with TemporaryDirectory() as directory:
+            source = GitRepo(local=os.path.join(directory), bare=False)
+            target = GitRepo(remote=source.local, bare=False)
+            # Make sure the default local repository directory or
+            # one of its parent directories is writable to us.
+            directory = target.local
+            while directory:
+                if os.access(directory, os.W_OK):
+                    break
+                parent = os.path.dirname(directory)
+                assert parent != directory
+                directory = parent
 
-    def test_hg_repo(self):
-        """
-        Test Mercurial repository support.
-        """
-        # Instantiate a HgRepo object using a configuration file.
-        repository = self.create_repo_using_config('hg', REMOTE_HG_REPO)
-        # Test HgRepo.create().
+    def test_ensure_hexadecimal_string(self):
+        """Test ensure_hexadecimal_string()."""
+        with TemporaryDirectory() as directory:
+            repository = GitRepo(local=directory)
+            self.assertRaises(
+                ValueError, repository.ensure_hexadecimal_string,
+                'definitely not a hexadecimal string',
+                'some random command',
+            )
+
+    def test_find_configured_repository(self):
+        """Test :func:`vcs_repo_mgr.find_configured_repository()`."""
+        with MockedHomeDirectory() as home:
+            # Prepare the locations of several local repositories.
+            bazaar_directory = os.path.join(home, 'a-bazaar-repository')
+            git_directory = os.path.join(home, 'a-git-repository')
+            mercurial_directory = os.path.join(home, 'a-mercurial-repository')
+            # Generate the configuration file.
+            prepare_config({
+                'my-bazaar-repo': {
+                    'bare': 'true',
+                    'local': bazaar_directory,
+                    'type': 'bazaar',
+                },
+                'my-git-repo': {
+                    'bare': 'true',
+                    'local': git_directory,
+                    'release-filter': '(.+)',
+                    'release-scheme': 'tags',
+                    'type': 'git',
+                },
+                'my-mercurial-repo': {
+                    'bare': 'false',
+                    'local': mercurial_directory,
+                    'type': 'mercurial',
+                },
+                'ambiguous-name': dict(type='git'),
+                'ambiguous_name': dict(type='mercurial'),
+                'unknown-type': dict(type='svn'),
+            })
+            # Make sure the configured Bazaar repository is loaded correctly.
+            bazaar_repository = find_configured_repository('my-bazaar-repo')
+            assert isinstance(bazaar_repository, BzrRepo)
+            assert bazaar_repository.local == bazaar_directory
+            assert bazaar_repository.bare is True
+            # Make sure the configured git repository is loaded correctly.
+            git_repository = find_configured_repository('my-git-repo')
+            assert isinstance(git_repository, GitRepo)
+            assert git_repository.local == git_directory
+            assert git_repository.bare is True
+            assert git_repository.release_scheme == 'tags'
+            assert git_repository.release_filter == '(.+)'
+            # Make sure the configured Mercurial repository is loaded correctly.
+            mercurial_repository = find_configured_repository('my-mercurial-repo')
+            assert isinstance(mercurial_repository, HgRepo)
+            assert mercurial_repository.local == mercurial_directory
+            assert mercurial_repository.bare is False
+            # Test caching of previously constructed repository objects.
+            assert bazaar_repository is find_configured_repository('my-bazaar-repo')
+            assert git_repository is find_configured_repository('my-git-repo')
+            assert mercurial_repository is find_configured_repository('my-mercurial-repo')
+            # Make sure unknown repository names raise the expected exception.
+            self.assertRaises(NoSuchRepositoryError, find_configured_repository, 'non-existing')
+            # Make sure ambiguous repository names raise the expected exception.
+            self.assertRaises(AmbiguousRepositoryNameError, find_configured_repository, 'ambiguous-name')
+            # Make sure unknown repository types raise the expected exception.
+            self.assertRaises(UnknownRepositoryTypeError, find_configured_repository, 'unknown-type')
+
+    def test_find_directory(self):
+        """Test the translation of repository names into repository directories."""
+        with MockedHomeDirectory() as home:
+            repository = GitRepo(local=os.path.join(home, 'repo'))
+            prepare_config({
+                'find-directory-test': {
+                    'local': repository.local,
+                    'type': repository.ALIASES[0],
+                }
+            })
+            returncode, output = run_cli(
+                main, '--repository=find-directory-test',
+                '--find-directory',
+            )
+            self.assertEquals(returncode, 0)
+            self.assertEquals(output.strip(), repository.local)
+
+    def test_release_filter_validation(self):
+        """Make sure the release filter validation refuses patterns with more than one capture group."""
+        with TemporaryDirectory() as directory:
+            self.assertRaises(
+                ValueError, setattr,
+                GitRepo(local=directory),
+                'release_filter', '(foo)bar(baz)',
+            )
+
+    def test_release_scheme_validation(self):
+        """Make sure the release scheme validation refuses invalid values."""
+        with TemporaryDirectory() as directory:
+            self.assertRaises(
+                ValueError, setattr,
+                GitRepo(local=directory),
+                'release_scheme', 'invalid',
+            )
+
+    def test_repository_argument_validation(self):
+        """Make sure Repository objects must be created with a local directory or remote location set."""
+        self.assertRaises(ValueError, GitRepo)
+
+    def test_sum_revision_numbers(self):
+        """Test :func:`vcs_repo_mgr.sum_revision_numbers()`."""
+        with MockedHomeDirectory() as home:
+            # Prepare two local repositories.
+            repo_one = GitRepo(author=AUTHOR_COMBINED, bare=False, local=os.path.join(home, 'repo-one'))
+            repo_two = HgRepo(author=AUTHOR_COMBINED, bare=False, local=os.path.join(home, 'repo-two'))
+            # Create an initial commit in each of the repositories.
+            for repo in repo_one, repo_two:
+                repo.create()
+                repo.context.write_file('README', "This is a %s repository.\n" % repo.friendly_name)
+                repo.add_files('README')
+                repo.commit("Initial commit")
+            # Check the argument validation in sum_revision_numbers().
+            self.assertRaises(ValueError, sum_revision_numbers, repo_one.local)
+            # Prepare a configuration file so we can test the command line interface.
+            prepare_config({
+                'repo-one': {
+                    'type': repo_one.ALIASES[0],
+                    'local': repo_one.local,
+                },
+                'repo-two': {
+                    'type': repo_two.ALIASES[0],
+                    'local': repo_two.local,
+                },
+            })
+            # Make sure `vcs-tool --sum-revisions' works.
+            returncode, output = run_cli(
+                main, '--sum-revisions',
+                'repo-one', repo_one.default_revision,
+                'repo-two', repo_two.default_revision,
+            )
+            self.assertEquals(returncode, 0)
+            initial_summed_revision_number = int(output)
+            self.assertEquals(initial_summed_revision_number, sum([
+                repo_one.find_revision_number(),
+                repo_two.find_revision_number(),
+            ]))
+            # Create an additional commit.
+            repo_one.context.write_file('README', "Not the same contents.\n")
+            repo_one.commit("Additional commit")
+            # Make sure the revision number has increased.
+            returncode, output = run_cli(
+                main, '--sum-revisions',
+                'repo-one', repo_one.default_revision,
+                'repo-two', repo_two.default_revision,
+            )
+            updated_summed_revision_number = int(output)
+            assert updated_summed_revision_number > initial_summed_revision_number
+
+
+class BackendTestCase(object):
+
+    """Abstract test case for version control repository manipulation."""
+
+    exceptionsToSkip = [NotImplementedError]
+    """Translate NotImplementedError into a skipped test."""
+
+    repository_type = None
+    """The :class:`.Repository` subclass to test."""
+
+    def check_pull(self, bare):
+        """Test pulling of changes from another repository."""
+        with TemporaryDirectory() as directory:
+            # Initialize two repository objects of the parametrized type.
+            source = self.get_instance(local=os.path.join(directory, 'source'), bare=False)
+            target = self.get_instance(local=os.path.join(directory, 'target'), bare=bare)
+            # Create the source repository with an initial commit.
+            self.create_initial_commit(source)
+            # Get the global commit id of the initial commit.
+            initial_commit = source.find_revision_id()
+            # Create the target repository as an empty repository.
+            target.create()
+            # Pull from the source repository into the target repository.
+            target.pull(remote=source.local)
+            # Check that our initial commit made it into the target repository.
+            assert target.find_revision_id() == initial_commit
+
+    def check_selective_push_or_pull(self, direction):
+        """Test pushing and pulling of specific revisions."""
+        with TemporaryDirectory() as directory:
+            # Initialize two repository objects of the parametrized type.
+            source, target = self.get_source_and_target(directory)
+            # Create two new branches in the source repository.
+            for branch_name in 'shared', 'private':
+                source.checkout()
+                source.create_branch(branch_name)
+                source.context.write_file(branch_name, "This is the '%s' branch." % branch_name)
+                source.add_files(branch_name)
+                source.commit("Created '%s' branch" % branch_name)
+            # Sanity check the current state of things.
+            assert 'private' in source.branches
+            assert 'private' not in target.branches
+            assert 'shared' in source.branches
+            assert 'shared' not in target.branches
+            # Push or pull the 'shared' branch but not the 'private' branch.
+            if direction == 'push':
+                source.push(remote=target.local, revision='shared')
+            else:
+                target.pull(remote=source.local, revision='shared')
+            # Sanity check the new state of things.
+            assert 'private' in source.branches
+            assert 'private' not in target.branches
+            assert 'shared' in source.branches
+            assert 'shared' in target.branches
+
+    def create_initial_commit(self, repository):
+        """Commit a README file in a repository as the initial commit."""
         repository.create()
-        # Test HgRepo.exists on an existing repository.
-        assert repository.exists, "Expected local Mercurial checkout to exist!"
-        # Test HGRepo.is_bare on an existing repository.
-        assert repository.is_bare, "Expected bare Mercurial checkout!"
-        # The virtualenv repository doesn't have a branch named `default' (it
-        # uses `trunk' instead) which breaks check_working_tree_support().
-        repository.default_revision = 'trunk'
-        # Test working tree support.
-        self.check_working_tree_support(repository)
-        # Test HgRepo.update().
-        repository.update()
-        # Test repr(HgRepo).
-        assert isinstance(repr(repository), str)
-        # Test HgRepo.branches
-        self.validate_all_revisions(repository.branches)
-        assert 'trunk' in repository.branches
-        # Test HgRepo.tags.
-        self.validate_all_revisions(repository.tags)
-        for tag_name in ['tip', '1.2', '1.3.4', '1.4.9', '1.5.2']:
-            assert tag_name in repository.tags
-        assert repository.tags['1.5'].revision_number > repository.tags['1.2'].revision_number
-        # Test HgRepo.find_revision_id().
-        assert repository.find_revision_id('1.2').startswith('ffa882669ca9')
-        # Test HgRepo.find_revision_number().
-        assert repository.find_revision_number('1.2') == 124
-        # Test HgRepo.export().
-        export_directory = create_temporary_directory()
-        repository.export(revision='1.2', directory=export_directory)
-        # Make sure the contents were properly exported.
-        assert os.path.isfile(os.path.join(export_directory, 'setup.py'))
-        assert os.path.isfile(os.path.join(export_directory, 'virtualenv.py'))
-
-    def test_git_repo(self):
-        """
-        Test git repository support.
-        """
-        # Instantiate a GitRepo object using a configuration file.
-        repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
-        # Test GitRepo.create().
-        repository.create()
-        # Test GitRepo.exists on an existing repository.
-        assert repository.exists, "Expected local Git checkout to exist!"
-        # Test GitRepo.is_bare on an existing repository.
-        assert repository.is_bare, "Expected bare Git checkout!"
-        # Test working tree support.
-        self.check_working_tree_support(repository)
-        # Test GitRepo.update().
-        repository.update()
-        # Test repr(GitRepo).
-        assert isinstance(repr(repository), str)
-        # Test GitRepo.branches
-        self.validate_all_revisions(repository.branches)
-        assert 'master' in repository.branches
-        # Test GitRepo.tags.
-        self.validate_all_revisions(repository.tags)
-        assert '1.0' in repository.tags
-        assert '1.0.1' in repository.tags
-        assert repository.tags['1.0.1'].revision_number > repository.tags['1.0'].revision_number
-        # Test GitRepo.find_revision_id().
-        assert repository.find_revision_id('1.0') == 'f6b89e5314d951bba4aa876ddbeef1deeb18932c'
-        # Test GitRepo.export().
-        export_directory = create_temporary_directory()
-        repository.export(revision='1.0', directory=export_directory)
-        # Make sure the contents were properly exported.
-        assert os.path.isfile(os.path.join(export_directory, 'setup.py'))
-        assert os.path.isfile(os.path.join(export_directory, 'verboselogs.py'))
-
-    def test_bzr_repo(self):
-        """
-        Test Bazaar repository support.
-        """
-        # Instantiate a BzrRepo object using a configuration file.
-        repository = self.create_repo_using_config('bzr', REMOTE_BZR_REPO)
-        # Test BzrRepo.create().
-        try:
-            repository.create()
-        except ExternalCommandFailed:
-            # Bazaar support in vcs-repo-mgr and in particular in the test
-            # suite has always been a bitch to support and lately (June 2017)
-            # all Travis CI builds have started failing [1] because `bzr branch
-            # lp:apt-python' consistently fails with an obscure internal error
-            # in Bazaar. At the same time I almost never `need to resort' to
-            # using the Bazaar support in vcs-repo-mgr nowadays, because I work
-            # less and less with Bazaar repositories (fortunately :-p). Because
-            # I don't have a working replacement repository right now, I've
-            # decided to be pragmatic about things for now :-).
-            # [1] https://travis-ci.org/xolox/python-vcs-repo-mgr/builds/246606302
-            return self.skipTest("Bazaar checkout failed")
-        # Test BzrRepo.exists on an existing repository.
-        assert repository.exists, "Expected local Bazaar checkout to exist!"
-        # Test BzrRepo.is_bare on an existing repository.
-        assert repository.is_bare, "Expected bare Bazaar checkout!"
-        # Test working tree support.
-        self.check_working_tree_support(repository)
-        # Test BzrRepo.update().
-        repository.update()
-        # Test repr(BzrRepo).
-        assert isinstance(repr(repository), str)
-        # Test BzrRepo.branches.
-        self.validate_all_revisions(repository.branches)
-        # Test BzrRepo.tags.
-        self.validate_all_revisions(repository.tags, id_pattern=re.compile(r'^\S+$'))
-        assert '0.7.9' in repository.tags
-        assert '0.8.9' in repository.tags
-        assert '0.9.3.9' in repository.tags
-        assert repository.tags['0.8.9'].revision_number > repository.tags['0.7.9'].revision_number
-        # Test BzrRepo.find_revision_id().
-        assert repository.find_revision_id('0.8.9') == 'git-v1:e2e4d3dd3dc2a41469f5d559cbdb5ca6c5057f01'
-        # Test BzrRepo.export().
-        export_directory = create_temporary_directory()
-        repository.export(revision='0.7.9', directory=export_directory)
-        # Make sure the contents were properly exported.
-        assert os.path.isfile(os.path.join(export_directory, 'setup.py'))
-        assert os.path.isdir(os.path.join(export_directory, 'apt'))
-
-    def check_working_tree_support(self, source_repo, file_to_change='setup.py'):
-        """Shared logic to check working tree support."""
-        # Make sure the source repository contains a bare checkout.
-        assert source_repo.is_bare, "Expected a bare repository checkout!"
-        # Create a clone of the repository that does have a working tree.
-        cloned_repo = self.clone_repo(source_repo, bare=False)
-        # Make sure the clone doesn't exist yet.
-        assert not cloned_repo.exists
-        # Create the clone.
-        cloned_repo.create()
-        # Make sure the clone was created.
-        assert cloned_repo.exists
-        # Make sure the clone has a working tree.
-        assert not cloned_repo.is_bare
-        # Make sure we can check whether the working tree is clean.
-        assert cloned_repo.is_clean, "Expected working tree to be clean?!"
-        # If the working tree is clean this shouldn't raise an exception.
-        cloned_repo.ensure_clean()
-        # Now change the contents of a tracked file.
-        filename = os.path.join(cloned_repo.local, file_to_change)
-        with open(filename, 'a') as handle:
-            handle.write("\n# An innocent comment :-).\n")
-        # Make sure the working tree is no longer clean.
-        assert not cloned_repo.is_clean, "Expected working to be dirty?!"
-        # Once the working tree is dirty this should raise the expected exception.
-        self.assertRaises(WorkingTreeNotCleanError, cloned_repo.ensure_clean)
-        self.check_checkout_support(cloned_repo)
-        self.check_commit_support(cloned_repo)
-        self.check_branch_support(cloned_repo)
-        self.check_merge_up_support(cloned_repo)
-        self.check_push_support(cloned_repo, source_repo)
-
-    def clone_repo(self, repository, **kw):
-        """Clone a repository object."""
-        # TODO Cloning of repository objects might deserve being a feature?
-        properties = 'bare', 'default_revision', 'release_scheme', 'release_filter'
-        options = dict((n, getattr(repository, n)) for n in properties)
-        options.update(kw)
-        return repository.__class__(
-            author="Peter Odding <vcs-repo-mgr@peterodding.com>",
-            local=create_temporary_directory(),
-            remote=repository.local,
-            **options
+        self.commit_file(
+            repository=repository,
+            filename='README',
+            contents="This will be part of the initial commit.\n",
+            message="Initial commit",
         )
 
-    def check_checkout_support(self, repository):
-        """Make sure that checkout() works and it can clean the working tree."""
-        logger.info("Testing checkout() support ..")
-        try:
+    def create_followup_commit(self, repository):
+        """Change the contents of the previously committed README file."""
+        self.commit_file(
+            repository=repository,
+            filename='README',
+            contents="Not the same contents.\n",
+            message="Changes to README",
+        )
+
+    def commit_file(self, repository, filename=None, contents=None, message=None):
+        """Commit a file to the given repository."""
+        filename = filename or random_string(15)
+        contents = contents or random_string(1024)
+        exists = repository.context.exists(filename)
+        repository.context.write_file(filename, contents)
+        repository.add_files(filename)
+        repository.commit(message=message or ("Committing %s file '%s'" % (
+            "changed" if exists else "new", filename,
+        )))
+
+    def get_instance(self, **options):
+        """Shortcut to create a new repository object of the parametrized type."""
+        options.setdefault('author', AUTHOR_COMBINED)
+        return self.repository_type(**options)
+
+    def get_source_and_target(self, directory):
+        """Shortcut to create two repositories where one is a clone of the other."""
+        source = self.get_instance(bare=False, local=os.path.join(directory, 'source'))
+        target = self.get_instance(bare=True, local=os.path.join(directory, 'target'), remote=source.local)
+        # Create an initial commit in the source repository.
+        self.create_initial_commit(source)
+        # Create the target repository by cloning the source (including the
+        # initial commit). If we hadn't created an initial commit first there
+        # would be no common ancestor change set in the two repositories and
+        # that would break the push() and pull() tests.
+        target.create()
+        return source, target
+
+    def test_checkout(self):
+        """Test checking out of branches."""
+        contents_on_default_branch = b"This will be part of the initial commit.\n"
+        contents_on_dev_branch = b"Not the same contents.\n"
+        unversioned_contents = b"This was never committed.\n"
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(bare=False, local=directory)
+            self.create_initial_commit(repository)
+            # Commit a change to README on another branch.
+            repository.create_branch('dev')
+            self.create_followup_commit(repository)
+            # Make sure the working tree can be updated to the default branch.
+            repository.checkout()
+            self.assertEquals(repository.context.read_file('README'), contents_on_default_branch)
+            # Make sure the working tree can be updated to the `dev' branch.
+            repository.checkout('dev')
+            self.assertEquals(repository.context.read_file('README'), contents_on_dev_branch)
+            # Make sure changes in the working tree can be discarded.
+            repository.context.write_file('README', unversioned_contents)
             repository.checkout(clean=True)
-        except NotImplementedError as e:
-            logger.warning("%s", e)
-        else:
-            assert repository.is_clean, "Expected working tree to be clean?!"
-            # Make sure the repository has some tags.
-            assert repository.ordered_tags, "Need repository with tags to test checkout() support!"
-            # Check out some random tags.
-            available_tags = list(repository.tags.keys())
-            for i in range(5):
-                tag = random.choice(available_tags)
-                repository.checkout(revision=tag)
+            self.assertEquals(repository.context.read_file('README'), contents_on_default_branch)
 
-    def check_commit_support(self, repository):
-        """Make sure we can add files and make new commits."""
-        logger.info("Testing add_files() and commit() support ..")
-        try:
-            # Make sure we start with a clean working tree.
-            repository.checkout(clean=True)
-            # Pick a random filename to add to the repository.
-            file_to_add = random_string()
-            # Create the new file.
-            with open(os.path.join(repository.local, file_to_add), 'w') as handle:
-                handle.write("Testing, 1, 2, 3 ..\n")
-            # Stage the addition of the new file.
-            repository.add_files(file_to_add)
-            # Make sure the working tree is dirty now.
-            assert not repository.is_clean
-            # Commit the change we made and ensure that commit() actually
-            # creates a new revision in the relevant branch.
-            with EnsureNewCommit(repository):
-                repository.commit(message="This is a test")
-            # Make sure the working tree is clean again.
-            assert repository.is_clean
-        except NotImplementedError as e:
-            logger.warning("%s", e)
+    def test_clone(self):
+        """Test cloning of local repositories."""
+        with TemporaryDirectory() as directory:
+            # Initialize two repository objects of the parametrized type.
+            source = self.get_instance(local=os.path.join(directory, 'source'), bare=False)
+            target = self.get_instance(local=os.path.join(directory, 'target'), remote=source.local)
+            # Create the source repository with an initial commit on the default branch.
+            self.create_initial_commit(source)
+            # Sanity check that we just created our first commit.
+            initial_commit = source.find_revision_id()
+            # Create the target repository by cloning the source repository.
+            target.create()
+            # Check that our initial commit made it into the target repository.
+            assert target.find_revision_id() == initial_commit
 
-    def check_branch_support(self, repository):
-        """Make sure we can create new branches."""
-        logger.info("Testing create_branch() support ..")
-        try:
-            # Generate a non-existing branch name.
-            while True:
-                branch_name = random_string()
-                if branch_name not in repository.branches:
-                    break
-            # Make sure we start with a clean working tree.
-            repository.checkout(clean=True)
-            # Create the new branch.
-            repository.create_branch(branch_name)
-            # Mutate a tracked file in the repository's working tree.
-            self.mutate_working_tree(repository)
-            # Make sure the working tree is no longer clean.
-            assert not repository.is_clean
-            # Commit the change we made and ensure that commit() actually
-            # creates a new revision in the relevant branch.
-            with EnsureNewCommit(repository, branch_name=branch_name):
-                repository.commit(message="This is a test")
-            # Make sure the working tree is clean again.
-            assert repository.is_clean
-            # Make sure we are on the expected branch.
-            assert repository.current_branch == branch_name
-            # Make sure the new branch has been created.
-            assert branch_name in repository.branches
-            # Since we just went through the effort of creating a new branch
-            # and committing a change to that branch, we now have all the
-            # preconditions we need to check merge support (yes this is a
-            # kludge that should be refactored at some point).
-            self.check_merge_support(repository, branch_name, repository.default_revision)
-            # Delete the branch we just created.
-            repository.delete_branch(branch_name)
-            # Make sure the new branch has been deleted.
-            assert branch_name not in repository.branches
-        except NotImplementedError as e:
-            logger.warning("%s", e)
+    def test_coerce_repository(self):
+        """Test :func:`vcs_repo_mgr.coerce_repository()`."""
+        with TemporaryDirectory() as directory:
+            # Initialize a repository object of the parametrized type.
+            repository = self.get_instance(local=directory)
+            repository.create()
+            # Test that the version control system of an existing local
+            # repository can be inferred from the directory contents.
+            coerced = coerce_repository(repository.local)
+            assert isinstance(coerced, type(repository))
 
-    def check_merge_support(self, repository, source_branch, target_branch):
-        """Make sure we can create new branches."""
-        logger.info("Testing merge() support ..")
-        try:
-            with EnsureNewCommit(repository, branch_name=target_branch):
-                repository.checkout(target_branch)
-                assert repository.is_clean
-                repository.merge(source_branch)
-                assert not repository.is_clean
-                repository.commit(message="This is a merge test")
-        except NotImplementedError as e:
-            logger.warning("%s", e)
+    def test_current_branch(self):
+        """Test introspection of the currently checked out branch."""
+        with TemporaryDirectory() as directory:
+            # Initialize a repository object of the parametrized type.
+            repository = self.get_instance(bare=False, local=directory)
+            # Create the repository with an initial commit.
+            self.create_initial_commit(repository)
+            # Sanity check that the current branch is not the same one that we
+            # are assuming doesn't exist yet :-).
+            assert repository.current_branch != 'dev'
+            # Create and check out a different branch.
+            repository.create_branch('dev')
+            # Create a commit on the branch to make sure that the
+            # branch has actually been created (e.g. in Mercurial).
+            repository.context.write_file('README', "Not the same contents.\n")
+            repository.commit(message="Commit on 'dev' branch")
+            # Make sure the current branch is properly detected.
+            assert repository.current_branch == 'dev'
 
-    def check_merge_up_support(self, repository, num_branches=5):
-        """Make sure we can merge changes up through release branches."""
-        logger.info("Testing merge_up() support ..")
-        try:
-            # Clone the repository with a custom release scheme/filter.
-            repository = self.clone_repo(
-                repository, bare=False,
-                release_scheme='branches',
-                release_filter='^v(\d*)$',
+    def test_default_author(self):
+        """Test introspection of default author configured in version control system."""
+        with MockedHomeDirectory() as home:
+            # Create the version control system specific
+            # configuration file with the default author.
+            self.configure_author(home, AUTHOR_NAME, AUTHOR_EMAIL)
+            # Initialize a repository object of the parametrized type.
+            repository = self.get_instance(local=os.path.join(home, 'repo'))
+            # Clear the override set by get_instance() so that the value of
+            # the `author' property is computed by calling get_author().
+            del repository.author
+            # Make sure the default author was picked up from the
+            # configuration file.
+            repository.author.name == AUTHOR_NAME
+            repository.author.email == AUTHOR_EMAIL
+            repository.author.combined == AUTHOR_COMBINED
+
+    def test_delete_branch(self):
+        """Test deletion/closing of branches."""
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(bare=False, local=directory)
+            self.create_initial_commit(repository)
+            repository.create_branch('dev')
+            self.create_followup_commit(repository)
+            # Check that Repository.branches includes the new branch.
+            assert 'dev' in repository.branches
+            # Merge the new branch into the default branch.
+            repository.checkout()
+            repository.merge(revision='dev')
+            repository.commit(message="Merged 'dev' branch")
+            # Delete the new branch.
+            repository.delete_branch('dev')
+            # Check that Repository.branches no longer includes the new branch.
+            assert 'dev' not in repository.branches
+
+    def test_ensure_exists(self):
+        """Test ensure_exists()."""
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(local=directory)
+            self.assertRaises(ValueError, repository.ensure_exists)
+
+    def test_export(self):
+        """Test exporting of revisions."""
+        with TemporaryDirectory() as directory:
+            # Initialize a repository object of the parametrized type.
+            repository = self.get_instance(bare=False, local=os.path.join(directory, 'repo'))
+            repository.create()
+            # Commit a file to the repository.
+            versioned_filename = random_string(10)
+            versioned_contents = random_string(250)
+            self.commit_file(
+                repository=repository,
+                filename=versioned_filename,
+                contents=versioned_contents,
+                message="Initial commit",
             )
-            # Pick a directory name of which we can reasonably expect that
-            # no existing repository will already contain this directory.
-            unique_directory = 'vcs-repo-mgr-merge-up-support-%s' % random_string()
-            absolute_directory = os.path.join(repository.local, unique_directory)
+            # Export the initial revision.
+            export_directory = os.path.join(directory, 'export')
+            returncode, output = run_cli(
+                main, '--repository=%s' % repository.local,
+                '--export=%s' % export_directory,
+            )
+            self.assertEquals(returncode, 0)
+            # Check that the file we committed was exported.
+            exported_file = os.path.join(export_directory, versioned_filename)
+            self.assertTrue(os.path.isfile(exported_file))
+            with codecs.open(exported_file, 'r', 'UTF-8') as handle:
+                self.assertEquals(handle.read(), versioned_contents)
+
+    def test_find_revision_number(self):
+        """Test querying the command line interface for local revision numbers."""
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(bare=False, local=directory)
+            repository.create()
+            self.create_initial_commit(repository)
+            # Check the revision number of the initial commit.
+            initial_revision_number = repository.find_revision_number()
+            assert initial_revision_number in (0, 1)
+            # Create a second commit.
+            self.create_followup_commit(repository)
+            # Check the revision number of the second commit.
+            second_revision_number = repository.find_revision_number()
+            assert second_revision_number in (1, 2)
+            assert second_revision_number > initial_revision_number
+            # Get the local revision number of a revision using the command line interface.
+            returncode, output = run_cli(
+                main, '--repository=%s' % repository.local,
+                '--find-revision-number',
+            )
+            self.assertEquals(returncode, 0)
+            self.assertEquals(int(output), second_revision_number)
+
+    def test_find_revision_id(self):
+        """Test querying the command line interface for global revision ids."""
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(bare=False, local=directory)
+            repository.create()
+            self.create_initial_commit(repository)
+            # Check the global revision id of the initial commit.
+            revision_id = repository.find_revision_id()
+            self.assertIsInstance(revision_id, string_types)
+            self.assertTrue(revision_id)
+            # Get the global revision id using the command line interface.
+            returncode, output = run_cli(
+                main, '--repository=%s' % repository.local,
+                '--find-revision-id',
+            )
+            self.assertEquals(returncode, 0)
+            self.assertEquals(output.strip(), revision_id)
+
+    def test_init(self):
+        """Test initialization of new, empty repositories."""
+        with TemporaryDirectory() as directory:
+            # Initialize a repository object of the parametrized type.
+            repository = self.get_instance(local=directory)
+            # Sanity check that the local repository doesn't exist yet.
+            assert repository.exists is False
+            # Make sure that Repository.create() claims
+            # to have just created the local repository.
+            assert repository.create() is True
+            # Sanity check that the local repository now exists.
+            assert repository.exists is True
+            # Make sure that Repository.create() doesn't try to create the repository again.
+            assert repository.create() is False
+
+    def test_is_clean(self):
+        """Test check whether working directory is clean."""
+        with TemporaryDirectory() as directory:
+            # Initialize a repository object of the parametrized type.
+            repository = self.get_instance(bare=False, local=directory)
+            # Create the local repository.
+            repository.create()
+            # Make sure the working tree is considered clean.
+            assert repository.is_clean is True
+            # Commit a file to version control.
+            self.create_initial_commit(repository)
+            # Make sure the working tree is still considered clean.
+            assert repository.is_clean is True
+            # Change the previously committed file.
+            repository.context.write_file('README', "Not the same contents.\n")
+            # Make sure the working tree is now considered dirty.
+            assert repository.is_clean is False
+            # Make sure ensure_clean() now raises the expected exception.
+            self.assertRaises(WorkingTreeNotCleanError, repository.ensure_clean)
+
+    def test_last_updated(self):
+        """Make sure the last_updated logic is robust."""
+        with TemporaryDirectory() as directory:
+            # Initialize two repository objects of the parametrized type.
+            source = self.get_instance(local=os.path.join(directory, 'source'), bare=False)
+            target = self.get_instance(local=os.path.join(directory, 'target'), remote=source.local)
+            # Create the source repository with an initial commit.
+            self.create_initial_commit(source)
+            # Make sure `last_updated' doesn't raise an exception when the
+            # local repository doesn't exist yet.
+            assert target.last_updated == 0
+            # Create the target repository by cloning the source.
+            target.create()
+            # Make sure the value of `last_updated' has been changed.
+            assert target.last_updated > 0
+
+    def test_limit_updates(self):
+        """Test limiting of repository updates."""
+        with TemporaryDirectory() as directory:
+            source, target = self.get_source_and_target(directory)
+            # Wait until the cloning of the target repository is more than a second ago.
+            while int(time.time()) <= int(target.last_updated):
+                time.sleep(0.1)
+            # Use the context manager to limit repository updates.
+            with limit_vcs_updates():
+                pull_command = target.get_pull_command()
+                # The first pull() is expected to be executed.
+                target.get_pull_command = MagicMock(return_value=pull_command)
+                target.pull()
+                assert target.get_pull_command.called
+                # The second pull() should be skipped.
+                target.get_pull_command = MagicMock(return_value=pull_command)
+                target.pull()
+                assert not target.get_pull_command.called
+
+    def test_list_releases(self):
+        """Test listing of releases."""
+        with MockedHomeDirectory() as home:
+            repository = self.get_instance(
+                bare=False,
+                local=os.path.join(home, 'repo'),
+                release_scheme='branches',
+                release_filter=r'^r(\d{4})$',
+            )
+            self.create_initial_commit(repository)
+            # Create some release branches to test with.
+            releases = '1720', '1722', '1723', '1724', '1726'
+            features = '12345', '23456', '34567', '45678'
+            for release_id in releases:
+                repository.create_branch('r' + release_id)
+                self.commit_file(repository)
+            for feature_id in features:
+                repository.create_branch('c' + feature_id)
+                self.commit_file(repository)
+            # Configure the repository's release scheme and filter.
+            prepare_config({
+                'list-repo': {
+                    'local': repository.local,
+                    'release-filter': repository.release_filter,
+                    'release-scheme': repository.release_scheme,
+                    'type': repository.ALIASES[0],
+                }
+            })
+            returncode, output = run_cli(main, '--repository=list-repo', '--list-releases')
+            listed_releases = output.splitlines()
+            assert returncode == 0
+            for release_id in releases:
+                assert release_id in listed_releases
+            for feature_id in features:
+                assert feature_id not in listed_releases
+
+    def test_merge_conflicts(self):
+        """Test handling of merge conflicts."""
+        with TemporaryDirectory() as directory:
+            # Initialize a repository object of the parametrized type.
+            repository = self.get_instance(bare=False, local=directory)
+            # Create the local repository.
+            repository.create()
+            # Create an initial commit in the repository.
+            versioned_filename = random_string(10)
+            versioned_contents = random_string(250)
+            self.commit_file(
+                repository=repository,
+                filename=versioned_filename,
+                contents=versioned_contents,
+                message="Initial commit",
+            )
+            # Create a new branch in which we'll modify
+            # the file that the initial commit created.
+            repository.create_branch('dev')
+            self.commit_file(
+                repository=repository,
+                filename=versioned_filename,
+                message="Commit on 'dev' branch",
+            )
+            # Now modify the same file in the default branch.
+            repository.checkout()
+            self.commit_file(
+                repository=repository,
+                filename=versioned_filename,
+                message="Commit on default branch",
+            )
+            # Now try to merge the 'dev' branch into the default branch
+            # (triggering the merge conflict) and make sure that the intended
+            # exception type is raised.
+            self.assertRaises(MergeConflictError, repository.merge, 'dev')
+            # Make sure the filename of the file with merge conflicts is
+            # available to callers.
+            assert repository.merge_conflicts == [versioned_filename]
+
+    def test_merge_up(self, num_branches=5):
+        """Test merging up through release branches."""
+        with MockedHomeDirectory() as home:
+            self.configure_author(home, AUTHOR_NAME, AUTHOR_EMAIL)
+            # Initialize a repository object of the parametrized type.
+            repository = self.get_instance(
+                bare=False,
+                local=os.path.join(home, 'repo'),
+                release_filter='^v(\d+)$',
+                release_scheme='branches',
+            )
+            # Add the repository to ~/.vcs-repo-mgr.ini.
+            prepare_config({
+                'merge-up-test': {
+                    'local': repository.local,
+                    'release-filter': '^v(\d+)$',
+                    'release-scheme': 'branches',
+                    'type': repository.ALIASES[0],
+                },
+            })
+            # Make sure the repository contains an initial commit on the
+            # default branch, otherwise the merge process will try to
+            # checkout() the default branch which can fail when that branch
+            # "doesn't have any contents yet".
+            self.create_initial_commit(repository)
             # Create the release branches.
             previous_branch = repository.current_branch
             for i in range(1, num_branches + 1):
                 branch_name = 'v%i' % i
                 repository.checkout(revision=previous_branch)
                 repository.create_branch(branch_name)
-                if not os.path.isdir(absolute_directory):
-                    os.mkdir(absolute_directory)
-                with open(os.path.join(absolute_directory, branch_name), 'w') as handle:
-                    handle.write("Version %i\n" % i)
-                repository.add_files(all=True)
-                repository.commit(message="Create release branch %s" % branch_name)
+                self.commit_file(
+                    repository=repository,
+                    filename=branch_name,
+                    contents="Version %i\n" % i,
+                    message="Create release branch '%s'" % branch_name,
+                )
                 previous_branch = branch_name
             # Create a feature branch based on the initial release branch.
-            feature_branch = 'vcs-repo-mgr-feature-branch-%s' % random_string()
+            feature_branch = 'feature-%s' % random_string(10)
             repository.checkout('v1')
             repository.create_branch(feature_branch)
-            with open(os.path.join(absolute_directory, 'v1'), 'w') as handle:
-                handle.write("Version 1.1\n")
-            repository.commit(message="Fixed a bug in version 1")
+            self.commit_file(
+                repository=repository,
+                filename='v1',
+                contents="Version 1.1\n",
+                message="Fixed a bug in version 1",
+            )
             assert feature_branch in repository.branches
-            # Merge the change up into the release branches.
-            expected_revision = repository.find_revision_id(revision=feature_branch)
-            merged_revision = repository.merge_up(target_branch='v1', feature_branch=feature_branch)
-            assert merged_revision == expected_revision
+            # Merge the change up into the release branches using the command line interface.
+            returncode, output = run_cli(
+                main, '--repository=merge-up-test',
+                '--revision=v1', '--merge-up',
+                feature_branch, merged=True,
+            )
+            self.assertEquals(returncode, 0)
             # Make sure the feature branch was closed.
             assert feature_branch not in repository.branches
             # Validate the contents of the default branch.
             repository.checkout()
-            entries = os.listdir(absolute_directory)
+            # Check that all of the release branches have been merged into the
+            # default branch by checking the `v1', `v2', etc. filenames.
+            entries = repository.context.list_entries('.')
             assert all('v%i' % i in entries for i in range(1, num_branches + 1))
-        except NotImplementedError as e:
-            logger.warning("%s", e)
+            # Make sure the contents of the bug fix were merged up.
+            assert repository.context.read_file('v1') == b"Version 1.1\n"
 
-    def check_push_support(self, cloned_repo, source_repo):
-        """Check whether changes can be pushed from one repository to another."""
-        try:
-            # Sanity check (in a simplistic and naive way) that downstream
-            # contains more change sets than upstream.
-            downstream_commits = cloned_repo.find_revision_number(cloned_repo.default_revision)
-            upstream_commits = source_repo.find_revision_number(source_repo.default_revision)
-            if downstream_commits > upstream_commits:
-                # Push the changes from downstream to upstream.
-                cloned_repo.push(remote=source_repo.local)
-                # Make sure the commit was propagated from downstream to upstream.
-                downstream_commits = cloned_repo.find_revision_number(cloned_repo.default_revision)
-                upstream_commits = source_repo.find_revision_number(cloned_repo.default_revision)
-                assert downstream_commits <= upstream_commits
-            else:
-                # The Bazaar support in vcs-repo-mgr is lacking features needed
-                # by the test suite to create new commits, hence there will be
-                # no difference between the two repositories and we can't test
-                # push() support.
-                assert isinstance(cloned_repo, BzrRepo)
-                assert isinstance(source_repo, BzrRepo)
-        except NotImplementedError as e:
-            logger.warning("%s", e)
+    def test_pull_revision(self):
+        """Test pulling of specific revisions."""
+        self.check_selective_push_or_pull('pull')
 
-    def mutate_working_tree(self, repository):
-        """Mutate an arbitrary tracked file in the repository's working tree."""
-        vcs_directory = os.path.abspath(repository.vcs_directory)
-        for root, dirs, files in os.walk(repository.local):
-            for filename in files:
-                # Make sure we don't directly change VCS metadata files (it
-                # could corrupt the repository).
-                pathname = os.path.abspath(os.path.join(root, filename))
-                common_prefix = os.path.commonprefix([vcs_directory, pathname])
-                if common_prefix != vcs_directory:
-                    with open(pathname, 'a') as handle:
-                        handle.write('\n\n# This is a test\n')
-                    return
+    def test_pull_with_working_tree(self):
+        """Test pulling of changes into a repository with a working tree."""
+        self.check_pull(bare=False)
 
-    def test_release_objects(self):
-        """
-        Test creation and ordering of Release objects.
-        """
-        repository = self.create_repo_using_config('git', REMOTE_GIT_REPO)
-        assert len(repository.releases) > 0
-        for identifier, release in repository.releases.items():
-            assert identifier == release.identifier
-            assert release.identifier == release.revision.tag
+    def test_pull_without_working_tree(self):
+        """Test pulling of changes into a repository with a working tree."""
+        self.check_pull(bare=True)
 
-    def test_revision_ordering(self):
-        """
-        Test ordering of tags and releases.
-        """
-        repository = coerce_repository(PIP_ACCEL_REPO)
+    def test_push(self):
+        """Test pulling of changes from another repository."""
+        with TemporaryDirectory() as directory:
+            # Initialize two repository objects of the parametrized type.
+            source, target = self.get_source_and_target(directory)
+            # Create a new commit in the source repository.
+            self.create_followup_commit(source)
+            # Get the global commit id of the commit.
+            commit_id = source.find_revision_id()
+            # Push from the source repository to the target repository.
+            source.push(remote=target.local)
+            # Check that our commit made it into the target repository.
+            assert target.find_revision_id() == commit_id
 
-        def find_tag_index(looking_for_tag):
-            for i, revision in enumerate(repository.ordered_tags):
-                if revision.tag == looking_for_tag:
-                    return i
-            raise Exception("Failed to find tag by name!")
+    def test_push_revision(self):
+        """Test pulling of specific revisions."""
+        self.check_selective_push_or_pull('push')
 
-        # Regular sorting would screw up the order of the following two
-        # examples so this is testing that the natural order sorting of tags
-        # works as expected (Do What I Mean :-).
-        assert find_tag_index('0.2') < find_tag_index('0.10')
-        assert find_tag_index('0.18') < find_tag_index('0.20')
+    def test_remotes(self):
+        """Test introspection of remote repositories."""
+        with TemporaryDirectory() as directory:
+            # Initialize two repository objects of the parametrized type.
+            source = self.get_instance(local=os.path.join(directory, 'source'), bare=False)
+            target = self.get_instance(local=os.path.join(directory, 'target'), remote=source.local)
+            # Create the source repository with an initial commit.
+            self.create_initial_commit(source)
+            # Create the target repository by cloning the source repository.
+            target.create()
+            # Sanity check the remotes of the target repository.
+            assert isinstance(target.default_pull_remote, Remote)
+            assert target.default_pull_remote.location == source.local
+            assert isinstance(target.default_push_remote, Remote)
+            assert target.default_push_remote.location == source.local
 
-        def find_release_index(looking_for_release):
-            for i, release in enumerate(repository.ordered_releases):
-                if release.identifier == looking_for_release:
-                    return i
-            raise Exception("Failed to find tag by name!")
+    def test_select_release(self):
+        """Test release selection."""
+        with MockedHomeDirectory() as home:
+            repository = self.get_instance(
+                bare=False,
+                local=os.path.join(home, 'repo'),
+                release_scheme='branches',
+                release_filter=r'^release-(.+)$',
+            )
+            self.create_initial_commit(repository)
+            # Make sure the correct exception is raised when no matching release is found.
+            self.assertRaises(NoMatchingReleasesError, repository.select_release, '1.1')
+            # Create some release branches to test with.
+            for release in ('1.0', '1.1', '1.2',
+                            '2.0', '2.1', '2.2', '2.3',
+                            '3.0', '3.1'):
+                repository.create_branch('release-%s' % release)
+                self.commit_file(repository)
+            # Try to select a non-existing release.
+            release = repository.select_release('2.7')
+            # Make sure the highest release that is isn't
+            # higher than the given release was selected.
+            self.assertIsInstance(release, Release)
+            self.assertEquals(release.identifier, '2.3')
+            self.assertEquals(release.revision.branch, 'release-2.3')
+            # Try the same thing we did above, but now using the command line
+            # interface. To do this we first need to configure the repository's
+            # release scheme and filter.
+            prepare_config({
+                'select-repo': {
+                    'bare': 'false',
+                    'local': repository.local,
+                    'release-filter': '^release-(.+)$',
+                    'release-scheme': 'branches',
+                    'type': repository.ALIASES[0],
+                }
+            })
+            returncode, output = run_cli(
+                main, '--repository=select-repo',
+                '--select-release=2.7', merged=True,
+            )
+            assert returncode == 0
+            assert output.strip() == '2.3'
 
-        assert find_release_index('0.2') < find_release_index('0.10')
-        assert find_release_index('0.18') < find_release_index('0.20')
+    def test_tags(self):
+        """Test that tags can be created and introspected."""
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(bare=False, local=directory)
+            # Create an initial commit and give it a tag.
+            self.create_initial_commit(repository)
+            initial_tag = random_string(10)
+            assert initial_tag not in repository.tags
+            repository.create_tag(initial_tag)
+            assert initial_tag in repository.tags
+            # Create a follow up commit and give it a tag.
+            self.create_followup_commit(repository)
+            followup_tag = random_string(10)
+            assert followup_tag not in repository.tags
+            repository.create_tag(followup_tag)
+            assert followup_tag in repository.tags
 
-    def test_release_selection(self):
-        """
-        Test the selection of appropriate releases.
+    def test_vcs_control_field(self):
+        """Test that Debian ``Vcs-*`` control file fields can be generated."""
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(bare=False, local=directory)
+            self.create_initial_commit(repository)
+            returncode, output = run_cli(
+                main, '--repository=%s' % repository.local,
+                '--vcs-control-field',
+            )
+            self.assertEquals(returncode, 0)
+            assert repository.control_field in output
+            assert repository.find_revision_id() in output
 
-        Uses the command line interface where possible in order to test the
-        "business logic" as well as the command line interface.
-        """
-        # Exact matches should always be honored (obviously :-).
-        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.2')
-        assert returncode == 0
-        assert output.strip() == '0.2'
-        # If e.g. a major.minor.PATCH release is not available, the release
-        # immediately below that should be selected (in this case: same
-        # major.minor but different PATCH level).
-        returncode, output = run_cli(main, '--repository=%s' % PIP_ACCEL_REPO, '--select-release=0.19.5')
-        assert returncode == 0
-        assert output.strip() == '0.19.3'
-        # Instantiate a repository for tests that can't be done through the CLI.
-        repository = coerce_repository(PIP_ACCEL_REPO)
-        # If no releases are available a known and documented exception should
-        # be raised.
-        self.assertRaises(NoMatchingReleasesError, repository.select_release, '0.0.1')
-        # Release objects should support repr().
-        release = repository.select_release('0.2')
-        assert isinstance(repr(release), str)
+    def test_working_tree_present(self):
+        """Test that repositories can be created with a working tree."""
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(bare=False, local=directory)
+            # Create a commit in the repository. The fact that we can even do
+            # this already confirms that the repository has a working tree :-P.
+            self.create_initial_commit(repository)
+            # Check the `bare' and `is_bare' properties.
+            assert repository.bare is False
+            assert repository.is_bare is False
 
-    def test_factory_deduplication(self):
-        """
-        Test caching of previously loaded repository objects.
-
-        This method tests that :func:`coerce_repository()` and similar
-        functions don't construct duplicate repository objects but return the
-        previously constructed instance instead.
-        """
-        a = coerce_repository(PIP_ACCEL_REPO)
-        b = coerce_repository(PIP_ACCEL_REPO)
-        c = coerce_repository(OUR_PUBLIC_REPO)
-        assert a is b
-        # Test our assumption about the `is' operator as well :-).
-        assert a is not c
-        assert b is not c
-
-    def create_repo_using_config(self, repository_type, remote_location,
-                                 second_repository_type=None,
-                                 second_remote_location=None):
-        """
-        Test configuration file loading.
-
-        Instantiates a :class:`.Repository` object by creating a temporary
-        configuration file, thereby testing both configuration file handling
-        and repository instantiation.
-        """
-        config_directory = create_temporary_directory()
-        local_checkout = create_local_checkout(remote_location)
-        vcs_repo_mgr.USER_CONFIG_FILE = os.path.join(config_directory, 'vcs-repo-mgr.ini')
-        with open(vcs_repo_mgr.USER_CONFIG_FILE, 'w') as handle:
-            # Create a valid repository definition.
-            handle.write('[test]\n')
-            handle.write('type = %s\n' % repository_type)
-            handle.write('local = %s\n' % local_checkout)
-            handle.write('remote = %s\n' % remote_location)
-            handle.write('release-scheme = tags\n')
-            handle.write('release-filter = (.+)\n')
-            # Create a second valid repository definition?
-            if second_repository_type and second_remote_location:
-                handle.write('[second]\n')
-                handle.write('type = %s\n' % second_repository_type)
-                handle.write('local = %s\n' % create_local_checkout(second_remote_location))
-                handle.write('remote = %s\n' % second_remote_location)
-            # Create the first of two duplicate definitions.
-            handle.write('[test_2]\n')
-            handle.write('type = %s\n' % repository_type)
-            handle.write('local = %s\n' % local_checkout)
-            handle.write('remote = %s\n' % remote_location)
-            # Create the second of two duplicate definitions.
-            handle.write('[test-2]\n')
-            handle.write('type = %s\n' % repository_type)
-            handle.write('local = %s\n' % local_checkout)
-            handle.write('remote = %s\n' % remote_location)
-            # Create an invalid repository definition.
-            handle.write('[unsupported-repo-type]\n')
-            handle.write('type = svn\n')
-            handle.write('local = /tmp/random-svn-checkout\n')
-        # Check the error handling in the Python API.
-        self.assertRaises(NoSuchRepositoryError, find_configured_repository, 'non-existing')
-        self.assertRaises(AmbiguousRepositoryNameError, find_configured_repository, 'test-2')
-        self.assertRaises(UnknownRepositoryTypeError, find_configured_repository, 'unsupported-repo-type')
-        # Test the Python API with a properly configured repository.
-        repository = find_configured_repository('test')
-        # Make sure `last_updated' doesn't blow up on repositories without a local clone.
-        if repository.exists:
-            assert repository.last_updated > 0
-        else:
-            assert repository.last_updated == 0
-        # Hand the constructed repository over to the caller.
-        return repository
-
-    def validate_revision(self, revision, id_pattern=HEX_SUM_PATTERN):
-        """
-        Perform some generic sanity checks on :class:`Revision` objects.
-        """
-        assert revision.revision_number > 0
-        assert isinstance(repr(revision), str)
-        assert id_pattern.match(revision.revision_id)
-
-    def validate_all_revisions(self, mapping, **kw):
-        """
-        Validate the given dictionary of revisions.
-
-        Performs some generic sanity checks on a dictionary with
-        :class:`Revision` values. Randomly picks some revisions to sanity
-        check (calculating the local revision number of a revision requires the
-        execution of an external command and there's really no point in doing
-        this hundreds of times).
-        """
-        revisions = list(mapping.values())
-        random.shuffle(revisions)
-        for revision in revisions[:10]:
-            self.validate_revision(revision, **kw)
+    def test_working_tree_absent(self):
+        """Test that repositories can be created without a working tree."""
+        with TemporaryDirectory() as directory:
+            repository = self.get_instance(bare=True, local=directory)
+            repository.create()
+            assert repository.bare is True
+            assert repository.is_bare is True
 
 
-class EnsureNewCommit(object):
+class BzrTestCase(BackendTestCase, TestCase):
 
-    """Context manager which ensures that a new commit is made."""
+    """Test case that runs :class:`BackendTestCase` using :class:`.BzrRepo`."""
 
-    def __init__(self, repository, branch_name=None):
-        """Initialize a :class:`EnsureNewCommit` object."""
-        self.repository = repository
-        self.branch_name = branch_name
-        self.old_id = None
+    repository_type = BzrRepo
 
-    def __enter__(self):
-        """Capture the global revision id of the most recent commit on the given branch."""
-        if self.branch_name in self.repository.branches:
-            self.old_id = self.repository.find_revision_id(revision=self.branch_name)
+    def configure_author(self, home, name, email):
+        """Configure the default author for Bazaar."""
+        filename = os.path.join(home, '.bazaar', 'bazaar.conf')
+        directory = os.path.dirname(filename)
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+        with open(filename, 'w') as handle:
+            handle.write('[DEFAULT]\n')
+            handle.write('email = %s <%s>\n' % (name, email))
 
-    def __exit__(self, exc_type=None, exc_value=None, traceback=None):
-        """Make sure a new commit was introduced since :func:`__enter__()`."""
-        if exc_type is None:
-            new_id = self.repository.find_revision_id(revision=self.branch_name)
-            assert new_id != self.old_id
+
+class GitTestCase(BackendTestCase, TestCase):
+
+    """Test case that runs :class:`BackendTestCase` using :class:`.GitRepo`."""
+
+    repository_type = GitRepo
+
+    def configure_author(self, home, name, email):
+        """Configure the default author for git."""
+        with open(os.path.join(home, '.gitconfig'), 'w') as handle:
+            handle.write('[user]\n')
+            handle.write('name = %s\n' % name)
+            handle.write('email = %s\n' % email)
+
+
+class HgTestCase(BackendTestCase, TestCase):
+
+    """Test case that runs :class:`BackendTestCase` using :class:`.HgRepo`."""
+
+    repository_type = HgRepo
+
+    def configure_author(self, home, name, email):
+        """Configure the default author for Mercurial."""
+        with open(os.path.join(home, '.hgrc'), 'w') as handle:
+            handle.write('[ui]\n')
+            handle.write('username = %s <%s>\n' % (name, email))
