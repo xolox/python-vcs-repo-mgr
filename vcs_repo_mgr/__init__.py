@@ -1652,33 +1652,36 @@ class Repository(PropertyManager):
             self.merge(revision=feature_branch.revision)
             # Commit the merge.
             self.commit(message="Merged %s" % feature_branch.expression)
-        # Find the release branches in the repository.
-        release_branches = [release.revision.branch for release in self.ordered_releases]
-        logger.debug("Found %s: %s",
-                     pluralize(len(release_branches), "release branch", "release branches"),
-                     concatenate(release_branches))
-        # Find the release branches after the target branch.
-        later_branches = release_branches[release_branches.index(target_branch) + 1:]
-        logger.info("Found %s after target branch (%s): %s",
-                    pluralize(len(later_branches), "release branch", "release branches"),
-                    target_branch,
-                    concatenate(later_branches))
-        # Determine the branches that need to be merged.
-        branches_to_upmerge = later_branches + [self.default_revision]
-        logger.info("Merging up from '%s' to %s: %s",
-                    target_branch,
-                    pluralize(len(branches_to_upmerge), "branch", "branches"),
-                    concatenate(branches_to_upmerge))
-        # Merge the feature branch up through the selected branches.
-        merge_queue = [target_branch] + branches_to_upmerge
-        while len(merge_queue) >= 2:
-            from_branch = merge_queue[0]
-            to_branch = merge_queue[1]
-            logger.info("Merging '%s' into '%s' ..", from_branch, to_branch)
-            self.checkout(revision=to_branch)
-            self.merge(revision=from_branch)
-            self.commit(message="Merged %s" % from_branch)
-            merge_queue.pop(0)
+        # We skip merging up through release branches when the target branch is
+        # the default branch (in other words, there's nothing to merge up).
+        if target_branch != self.default_revision:
+            # Find the release branches in the repository.
+            release_branches = [release.revision.branch for release in self.ordered_releases]
+            logger.debug("Found %s: %s",
+                         pluralize(len(release_branches), "release branch", "release branches"),
+                         concatenate(release_branches))
+            # Find the release branches after the target branch.
+            later_branches = release_branches[release_branches.index(target_branch) + 1:]
+            logger.info("Found %s after target branch (%s): %s",
+                        pluralize(len(later_branches), "release branch", "release branches"),
+                        target_branch,
+                        concatenate(later_branches))
+            # Determine the branches that need to be merged.
+            branches_to_upmerge = later_branches + [self.default_revision]
+            logger.info("Merging up from '%s' to %s: %s",
+                        target_branch,
+                        pluralize(len(branches_to_upmerge), "branch", "branches"),
+                        concatenate(branches_to_upmerge))
+            # Merge the feature branch up through the selected branches.
+            merge_queue = [target_branch] + branches_to_upmerge
+            while len(merge_queue) >= 2:
+                from_branch = merge_queue[0]
+                to_branch = merge_queue[1]
+                logger.info("Merging '%s' into '%s' ..", from_branch, to_branch)
+                self.checkout(revision=to_branch)
+                self.merge(revision=from_branch)
+                self.commit(message="Merged %s" % from_branch)
+                merge_queue.pop(0)
         # Check if we need to delete or close the feature branch.
         if delete and feature_branch and self.is_feature_branch(feature_branch.revision):
             # Delete or close the feature branch.
