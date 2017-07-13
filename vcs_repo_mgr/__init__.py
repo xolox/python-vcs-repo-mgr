@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: July 3, 2017
+# Last Change: July 14, 2017
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -831,6 +831,12 @@ class Repository(PropertyManager):
         """
         return natsort(self.tags.values(), key=operator.attrgetter('tag'))
 
+    @property
+    def release_branches(self):
+        """A dictionary that maps branch names to :class:`Release` objects."""
+        self.ensure_release_scheme('branches')
+        return dict((r.revision.branch, r) for r in self.releases.values())
+
     @mutable_property
     def release_filter(self):
         """
@@ -1195,6 +1201,18 @@ class Repository(PropertyManager):
             raise ValueError(msg)
         return value
 
+    def ensure_release_scheme(self, expected_scheme):
+        """
+        Make sure the release scheme is correctly configured.
+
+        :param expected_scheme: The expected release scheme (a string).
+        :raises: :exc:`~exceptions.TypeError` when :attr:`release_scheme`
+                 doesn't match the expected release scheme.
+        """
+        if self.release_scheme != expected_scheme:
+            msg = "Repository isn't using '%s' release scheme!"
+            raise TypeError(msg % expected_scheme)
+
     def export(self, directory, revision=None):
         """
         Export the complete tree from the local version control repository.
@@ -1493,6 +1511,35 @@ class Repository(PropertyManager):
                     break
         return False
 
+    def is_feature_branch(self, branch_name):
+        """
+        Try to determine whether a branch name refers to a feature branch.
+
+        :param branch_name: The name of a branch (a string).
+        :returns: :data:`True` if the branch name appears to refer to a feature
+                  branch, :data:`False` otherwise.
+
+        This method is used by :func:`merge_up()` to determine whether the
+        feature branch that was merged should be deleted or closed.
+
+        If the branch name matches :attr:`default_revision` or one of the
+        branch names of the :attr:`releases` then it is not considered a
+        feature branch, which means it won't be closed.
+        """
+        # The following checks are intentionally ordered from lightweight to heavyweight.
+        if branch_name == self.default_revision:
+            # The default branch is never a feature branch.
+            return False
+        elif branch_name not in self.branches:
+            # Invalid branch names can't be feature branch names.
+            return False
+        elif self.release_scheme == 'branches' and branch_name in self.release_branches:
+            # Release branches are not feature branches.
+            return False
+        else:
+            # Other valid branches are considered feature branches.
+            return True
+
     def mark_updated(self):
         """Mark a successful update so that :attr:`last_updated` can report it."""
         self.context.write_file(self.last_updated_file, '%i\n' % time.time())
@@ -1633,7 +1680,7 @@ class Repository(PropertyManager):
             self.commit(message="Merged %s" % from_branch)
             merge_queue.pop(0)
         # Check if we need to delete or close the feature branch.
-        if delete and feature_branch and feature_branch.revision in self.branches:
+        if delete and feature_branch and self.is_feature_branch(feature_branch.revision):
             # Delete or close the feature branch.
             self.delete_branch(
                 branch_name=feature_branch.revision,
@@ -1710,11 +1757,10 @@ class Repository(PropertyManager):
 
         :param release_id: A :attr:`Release.identifier` value (a string).
         :returns: A branch name (a string).
-        :raises: :exc:`~exceptions.TypeError` when the repository is not
-                 using branches as its release scheme.
+        :raises: :exc:`~exceptions.TypeError` when :attr:`release_scheme` isn't
+                 'branches'.
         """
-        if self.release_scheme != 'branches':
-            raise TypeError("Repository isn't using 'branches' release scheme!")
+        self.ensure_release_scheme('branches')
         return self.releases[release_id].revision.branch
 
     def release_to_tag(self, release_id):
@@ -1723,11 +1769,10 @@ class Repository(PropertyManager):
 
         :param release_id: A :attr:`Release.identifier` value (a string).
         :returns: A tag name (a string).
-        :raises: :exc:`~exceptions.TypeError` when the repository is not
-                 using tags as its release scheme.
+        :raises: :exc:`~exceptions.TypeError` when :attr:`release_scheme` isn't
+                 'tags'.
         """
-        if self.release_scheme != 'tags':
-            raise TypeError("Repository isn't using 'tags' release scheme!")
+        self.ensure_release_scheme('tags')
         return self.releases[release_id].revision.tag
 
     def select_release(self, highest_allowed_release):
