@@ -110,7 +110,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '1.0'
+__version__ = '2.0'
 
 USER_CONFIG_FILE = '~/.vcs-repo-mgr.ini'
 """The location of the user-specific configuration file (a string, parsed using :func:`.parse_path()`)."""
