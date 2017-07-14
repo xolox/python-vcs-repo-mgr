@@ -1124,6 +1124,41 @@ class Repository(PropertyManager):
         logger.info("Creating branch '%s' in %s ..", branch_name, format_path(self.local))
         self.context.execute(*self.get_create_branch_command(branch_name))
 
+    def create_release_branch(self, branch_name):
+        """
+        Create a new release branch.
+
+        :param branch_name: The name of the release branch to create (a string).
+        :raises: The following exceptions can be raised:
+
+                  - :exc:`~exceptions.TypeError` when :attr:`release_scheme`
+                    isn't set to 'branches'.
+                  - :exc:`~exceptions.ValueError` when the branch name doesn't
+                    match the configured :attr:`release_filter` or no parent
+                    release branches are available.
+
+        This method automatically checks out the new release branch, but note
+        that the new branch may not actually exist until a commit has been made
+        on the branch.
+        """
+        # Validate the release scheme.
+        self.ensure_release_scheme('branches')
+        # Validate the name of the release branch.
+        if self.compiled_filter.match(branch_name) is None:
+            msg = "The branch name '%s' doesn't match the release filter!"
+            raise ValueError(msg % branch_name)
+        # Make sure the local repository exists.
+        self.create()
+        # Figure out the correct parent release branch.
+        candidates = natsort([r.revision.branch for r in self.ordered_releases] + [branch_name])
+        index = candidates.index(branch_name) - 1
+        if index < 0:
+            msg = "Failed to determine suitable parent branch for release branch '%s'!"
+            raise ValueError(msg % branch_name)
+        parent_branch = candidates[index]
+        self.checkout(parent_branch)
+        self.create_branch(branch_name)
+
     def create_tag(self, tag_name):
         """
         Create a new tag based on the working tree's revision.
@@ -1594,7 +1629,7 @@ class Repository(PropertyManager):
         """The merge conflict handler (a callable, defaults to :func:`interactive_merge_conflict_handler()`)."""
         return self.interactive_merge_conflict_handler
 
-    def merge_up(self, target_branch=None, feature_branch=None, delete=True):
+    def merge_up(self, target_branch=None, feature_branch=None, delete=True, create=True):
         """
         Merge a change into one or more release branches and the default branch.
 
@@ -1607,25 +1642,28 @@ class Repository(PropertyManager):
         :param delete: :data:`True` (the default) to delete or close the
                        feature branch after it is merged, :data:`False`
                        otherwise.
+        :param create: :data:`True` to automatically create the target branch
+                       when it doesn't exist yet, :data:`False` otherwise.
         :returns: If `feature_branch` is given the global revision id of the
                   feature branch is returned, otherwise the global revision id
                   of the target branch (before any merges performed by
-                  :func:`merge_up()`) is returned.
+                  :func:`merge_up()`) is returned. If the target branch is
+                  created by :func:`merge_up()` and `feature_branch` isn't
+                  given then :data:`None` is returned.
         :raises: The following exceptions can be raised:
 
                  - :exc:`~exceptions.TypeError` when `target_branch` and
                    :attr:`current_branch` are both :data:`None`.
                  - :exc:`~exceptions.ValueError` when the given target branch
-                   doesn't exist (based on :attr:`branches`).
+                   doesn't exist (based on :attr:`branches`) and `create` is
+                   :data:`False`.
                  - :exc:`~executor.ExternalCommandFailed` if a command fails.
         """
         timer = Timer()
-        was_created = self.create()
-        # Validate the target branch or select the default target branch.
-        if target_branch:
-            if target_branch not in self.branches:
-                raise ValueError("The target branch %r doesn't exist!" % target_branch)
-        else:
+        repository_was_created = self.create()
+        revision_to_merge = None
+        # Default the target branch to the current branch.
+        if not target_branch:
             target_branch = self.current_branch
             if not target_branch:
                 raise TypeError("You need to specify the target branch! (where merging starts)")
@@ -1634,12 +1672,20 @@ class Repository(PropertyManager):
         # Make sure we start with a clean working tree.
         self.ensure_clean()
         # Make sure we're up to date with our upstream repository (if any).
-        if not was_created:
+        if not repository_was_created:
             self.pull()
-        # Check out the target branch.
-        self.checkout(revision=target_branch)
-        # Get the global revision id of the release branch we're about to merge.
-        revision_to_merge = self.find_revision_id(target_branch)
+        # Checkout or create the target branch.
+        logger.debug("Checking if target branch exists (%s) ..", target_branch)
+        if target_branch in self.branches:
+            self.checkout(revision=target_branch)
+            # Get the global revision id of the release branch we're about to merge.
+            revision_to_merge = self.find_revision_id(target_branch)
+        elif not create:
+            raise ValueError("The target branch %r doesn't exist!" % target_branch)
+        elif self.compiled_filter.match(target_branch):
+            self.create_release_branch(target_branch)
+        else:
+            self.create_branch(target_branch)
         # Check if we need to merge in a feature branch.
         if feature_branch:
             if feature_branch.location:

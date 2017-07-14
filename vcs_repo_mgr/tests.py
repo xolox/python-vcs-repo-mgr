@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: July 2, 2017
+# Last Change: July 14, 2017
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Test suite for the `vcs-repo-mgr` package."""
@@ -737,22 +737,25 @@ class BackendTestCase(object):
             # available to callers.
             assert repository.merge_conflicts == [versioned_filename]
 
-    def test_merge_up(self, num_branches=5):
+    def test_merge_up(self):
         """Test merging up through release branches."""
+        initial_release_branches = ['v1', 'v2', 'v3', 'v4']
+        intermediate_release_branch = 'v3.1'
+        final_release_branches = ['v1', 'v2', 'v3', intermediate_release_branch, 'v4']
         with MockedHomeDirectory() as home:
             self.configure_author(home, AUTHOR_NAME, AUTHOR_EMAIL)
             # Initialize a repository object of the parametrized type.
             repository = self.get_instance(
                 bare=False,
                 local=os.path.join(home, 'repo'),
-                release_filter='^v(\d+)$',
+                release_filter=r'^v(\d+(?:\.\d+)*)$',
                 release_scheme='branches',
             )
             # Add the repository to ~/.vcs-repo-mgr.ini.
             prepare_config({
                 'merge-up-test': {
                     'local': repository.local,
-                    'release-filter': '^v(\d+)$',
+                    'release-filter': r'^v(\d+(?:\.\d+)*)$',
                     'release-scheme': 'branches',
                     'type': repository.ALIASES[0],
                 },
@@ -764,32 +767,31 @@ class BackendTestCase(object):
             self.create_initial_commit(repository)
             # Create the release branches.
             previous_branch = repository.current_branch
-            for i in range(1, num_branches + 1):
-                branch_name = 'v%i' % i
+            for branch_name in initial_release_branches:
                 repository.checkout(revision=previous_branch)
                 repository.create_branch(branch_name)
                 self.commit_file(
                     repository=repository,
                     filename=branch_name,
-                    contents="Version %i\n" % i,
+                    contents="This is release branch '%s'\n" % branch_name,
                     message="Create release branch '%s'" % branch_name,
                 )
                 previous_branch = branch_name
             # Create a feature branch based on the initial release branch.
             feature_branch = 'feature-%s' % random_string(10)
-            repository.checkout('v1')
+            repository.checkout('v3')
             repository.create_branch(feature_branch)
             self.commit_file(
                 repository=repository,
-                filename='v1',
-                contents="Version 1.1\n",
-                message="Fixed a bug in version 1",
+                filename=intermediate_release_branch,
+                contents="This will be release branch '%s'\n" % intermediate_release_branch,
+                message="Fixed a bug in version 3!",
             )
             assert feature_branch in repository.branches
             # Merge the change up into the release branches using the command line interface.
             returncode, output = run_cli(
                 main, '--repository=merge-up-test',
-                '--revision=v1', '--merge-up',
+                '--revision=v3.1', '--merge-up',
                 feature_branch, merged=True,
             )
             self.assertEquals(returncode, 0)
@@ -800,9 +802,13 @@ class BackendTestCase(object):
             # Check that all of the release branches have been merged into the
             # default branch by checking the `v1', `v2', etc. filenames.
             entries = repository.context.list_entries('.')
-            assert all('v%i' % i in entries for i in range(1, num_branches + 1))
+            assert all(fn in entries for fn in final_release_branches)
             # Make sure the contents of the bug fix were merged up.
-            assert repository.context.read_file('v1') == b"Version 1.1\n"
+            assert repository.context.read_file('v1') == b"This is release branch 'v1'\n"
+            assert repository.context.read_file('v2') == b"This is release branch 'v2'\n"
+            assert repository.context.read_file('v3') == b"This is release branch 'v3'\n"
+            assert repository.context.read_file('v3.1') == b"This will be release branch 'v3.1'\n"
+            assert repository.context.read_file('v4') == b"This is release branch 'v4'\n"
 
     def test_pull_revision(self):
         """Test pulling of specific revisions."""
