@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: July 14, 2017
+# Last Change: August 2, 2017
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -110,7 +110,7 @@ from vcs_repo_mgr.exceptions import (
 )
 
 # Semi-standard module versioning.
-__version__ = '2.0'
+__version__ = '2.0.1'
 
 USER_CONFIG_FILE = '~/.vcs-repo-mgr.ini'
 """The location of the user-specific configuration file (a string, parsed using :func:`.parse_path()`)."""
