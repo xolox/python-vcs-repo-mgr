@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: July 14, 2017
+# Last Change: January 20, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Test suite for the `vcs-repo-mgr` package."""
@@ -10,7 +10,6 @@
 import codecs
 import logging
 import os
-import re
 import time
 
 # External dependencies.
@@ -34,7 +33,6 @@ from vcs_repo_mgr import (
     USER_CONFIG_FILE,
     coerce_author,
     coerce_feature_branch,
-    coerce_pattern,
     coerce_repository,
     find_configured_repository,
     limit_vcs_updates,
@@ -109,14 +107,6 @@ class VcsRepoMgrTestCase(TestCase):
         assert feature_branch.revision == 'dev'
         # Make sure FeatureBranchSpec objects pass through untouched.
         assert feature_branch is coerce_feature_branch(feature_branch)
-
-    def test_coerce_pattern(self):
-        """Test :func:`vcs_repo_mgr.coerce_pattern()`."""
-        pattern = re.compile('')
-        # Make sure strings are converted to compiled regular expression patterns.
-        assert isinstance(coerce_pattern('foobar'), type(pattern))
-        # Make sure compiled regular expressions pass through untouched.
-        assert pattern is coerce_pattern(pattern)
 
     def test_coerce_repository(self):
         """Test :func:`vcs_repo_mgr.coerce_repository()`."""

@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 2, 2017
+# Last Change: January 20, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -89,7 +89,7 @@ import time
 # External dependencies.
 from executor import ExternalCommandFailed
 from executor.contexts import LocalContext
-from humanfriendly import Timer, coerce_boolean, format_path, parse_path
+from humanfriendly import Timer, coerce_boolean, coerce_pattern, format_path, parse_path
 from humanfriendly.text import compact, concatenate, format, pluralize
 from humanfriendly.prompts import prompt_for_confirmation
 from humanfriendly.terminal import connected_to_terminal
@@ -182,18 +182,6 @@ def coerce_feature_branch(value):
         msg = "Expected string or FeatureBranchSpec object as argument, got %s instead!"
         raise ValueError(msg % type(value))
     return FeatureBranchSpec(expression=value)
-
-
-def coerce_pattern(value):
-    """
-    Convert a string to a compiled regular expression.
-
-    :param value: A string or regular expression pattern.
-    :returns: A compiled regular expression pattern.
-    """
-    if isinstance(value, string_types):
-        value = re.compile(value)
-    return value
 
 
 def coerce_repository(value, context=None):
