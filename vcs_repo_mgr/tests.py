@@ -10,6 +10,8 @@
 import codecs
 import logging
 import os
+import shutil
+import tempfile
 import time
 
 # External dependencies.
@@ -55,6 +57,7 @@ from vcs_repo_mgr.exceptions import (
 AUTHOR_NAME = 'John Doe'
 AUTHOR_EMAIL = 'john.doe@example.com'
 AUTHOR_COMBINED = '%s <%s>' % (AUTHOR_NAME, AUTHOR_EMAIL)
+TEMPORARY_DIRECTORIES = []
 
 # Initialize a logger.
 logger = logging.getLogger(__name__)
@@ -67,6 +70,20 @@ def prepare_config(config):
             handle.write('[%s]\n' % name)
             for key, value in options.items():
                 handle.write('%s = %s\n' % (key, value))
+
+
+def setUpModule():
+    """Create a temporary ``$HOME`` directory."""
+    pathname = tempfile.mkdtemp()
+    TEMPORARY_DIRECTORIES.append(pathname)
+    os.environ['HOME'] = pathname
+
+
+def tearDownModule():
+    """Cleanup the temporary ``$HOME`` directory."""
+    while TEMPORARY_DIRECTORIES:
+        shutil.rmtree(TEMPORARY_DIRECTORIES.pop(0))
+    os.environ['HOME'] = ''
 
 
 class VcsRepoMgrTestCase(TestCase):
