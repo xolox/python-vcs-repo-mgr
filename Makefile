@@ -1,7 +1,7 @@
 # Makefile for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: April 29, 2017
+# Last Change: March 5, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 PACKAGE_NAME = vcs-repo-mgr
@@ -72,5 +72,6 @@ clean:
 	@rm -Rf *.egg .cache .coverage .tox build dist docs/build htmlcov
 	@find -depth -type d -name __pycache__ -exec rm -Rf {} \;
 	@find -type f -name '*.pyc' -delete
+	@git co stdeb.cfg &> /dev/null || true
 
 .PHONY: default install reset check test tox readme docs publish clean
