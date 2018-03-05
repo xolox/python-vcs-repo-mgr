@@ -255,7 +255,7 @@ class HgRepo(Repository):
 
     def get_merge_command(self, revision):
         """Get the command to merge a revision into the current branch (without committing the result)."""
-        return ['hg', 'merge', '--rev=%s' % revision]
+        return ['hg', '--config', 'ui.merge=internal:merge', 'merge', '--rev=%s' % revision]
 
     def get_pull_command(self, remote=None, revision=None):
         """Get the command to pull changes from a remote repository into the local repository."""
