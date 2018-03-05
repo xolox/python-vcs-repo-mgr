@@ -1,3 +1,9 @@
+# Version control system repository manager.
+#
+# Author: Peter Odding <peter@peterodding.com>
+# Last Change: March 5, 2018
+# URL: https://github.com/xolox/python-vcs-repo-mgr
+
 """
 Custom exception types raised by the `vcs-repo-mgr` package.
 
@@ -74,4 +80,14 @@ class MergeConflictError(VcsRepoMgrError):
 
     Raised by :func:`~vcs_repo_mgr.Repository.merge()` when it performs a merge
     that results in merge conflicts.
+    """
+
+
+class MissingWorkingTreeError(VcsRepoMgrError):
+
+    """
+    Exception raised when working tree support is required but missing.
+
+    Raised by :func:`~vcs_repo_mgr.Repository.ensure_working_tree()` when
+    it finds that the local repository doesn't support a working tree.
     """

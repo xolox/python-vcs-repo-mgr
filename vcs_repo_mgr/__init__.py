@@ -103,6 +103,7 @@ from six.moves import urllib_parse as urlparse
 from vcs_repo_mgr.exceptions import (
     AmbiguousRepositoryNameError,
     MergeConflictError,
+    MissingWorkingTreeError,
     NoMatchingReleasesError,
     NoSuchRepositoryError,
     UnknownRepositoryTypeError,
@@ -922,6 +923,15 @@ class Repository(PropertyManager):
         """The location of the remote repository (a string or :data:`None`)."""
 
     @property
+    def supports_working_tree(self):
+        """
+        :data:`True` if the repository supports a working tree, :data:`False` otherwise.
+
+        This property needs to be implemented by subclasses.
+        """
+        raise NotImplementedError()
+
+    @property
     def tags(self):
         """
         A dictionary that maps tag names to :class:`Revision` objects.
@@ -1018,8 +1028,9 @@ class Repository(PropertyManager):
                    compatibility with older versions of `vcs-repo-mgr`
                    where the keyword argument `all` was used.
         """
-        # Make sure the local repository exists.
+        # Make sure the local repository exists and supports a working tree.
         self.create()
+        self.ensure_working_tree()
         # Include added and/or removed files in the next commit.
         logger.info("Staging changes to be committed in %s ..", format_path(self.local))
         self.context.execute(*self.get_add_files_command(*filenames))
@@ -1033,8 +1044,9 @@ class Repository(PropertyManager):
         :param clean: :data:`True` to discard changes in the working tree,
                       :data:`False` otherwise.
         """
-        # Make sure the local repository exists.
+        # Make sure the local repository exists and supports a working tree.
         self.create()
+        self.ensure_working_tree()
         # Update the working tree of the local repository.
         revision = revision or self.default_revision
         logger.info("Checking out revision '%s' in %s ..", revision, format_path(self.local))
@@ -1049,7 +1061,9 @@ class Repository(PropertyManager):
                        :func:`coerce_author()` for details
                        on argument handling).
         """
+        # Make sure the local repository exists and supports a working tree.
         self.ensure_exists()
+        self.ensure_working_tree()
         logger.info("Committing changes in %s: %s", format_path(self.local), message)
         author = coerce_author(author) if author else self.author
         self.context.execute(*self.get_commit_command(message, author))
@@ -1106,8 +1120,9 @@ class Repository(PropertyManager):
         new branch may not actually exist until a commit has been made on the
         branch.
         """
-        # Make sure the local repository exists.
+        # Make sure the local repository exists and supports a working tree.
         self.create()
+        self.ensure_working_tree()
         # Create the new branch in the local repository.
         logger.info("Creating branch '%s' in %s ..", branch_name, format_path(self.local))
         self.context.execute(*self.get_create_branch_command(branch_name))
@@ -1153,8 +1168,9 @@ class Repository(PropertyManager):
 
         :param tag_name: The name of the tag to create (a string).
         """
-        # Make sure the local repository exists.
+        # Make sure the local repository exists and supports a working tree.
         self.create()
+        self.ensure_working_tree()
         # Create the new tag in the local repository.
         logger.info("Creating tag '%s' in %s ..", tag_name, format_path(self.local))
         self.context.execute(*self.get_create_tag_command(tag_name))
@@ -1235,6 +1251,19 @@ class Repository(PropertyManager):
         if self.release_scheme != expected_scheme:
             msg = "Repository isn't using '%s' release scheme!"
             raise TypeError(msg % expected_scheme)
+
+    def ensure_working_tree(self):
+        """
+        Make sure the local repository has working tree support.
+
+        :raises: :exc:`~vcs_repo_mgr.exceptions.MissingWorkingTreeError` when
+                 the local repository doesn't support a working tree.
+        """
+        if not self.supports_working_tree:
+            raise MissingWorkingTreeError(compact("""
+                A working tree is required but the local {friendly_name}
+                repository at {directory} doesn't support a working tree!
+            """, friendly_name=self.friendly_name, directory=format_path(self.local)))
 
     def export(self, directory, revision=None):
         """
@@ -1585,8 +1614,9 @@ class Repository(PropertyManager):
         Refer to the documentation of :attr:`merge_conflict_handler` if you
         want to customize the handling of merge conflicts.
         """
-        # Make sure the local repository exists.
+        # Make sure the local repository exists and supports a working tree.
         self.create()
+        self.ensure_working_tree()
         # Merge the specified revision into the current branch.
         revision = revision or self.default_revision
         logger.info("Merging revision '%s' in %s ..", revision, format_path(self.local))

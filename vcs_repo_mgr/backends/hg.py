@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: August 2, 2017
+# Last Change: March 5, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Support for Mercurial version control repositories."""
@@ -122,6 +122,11 @@ class HgRepo(Repository):
                 if status and name and status.upper() != 'R':
                     filenames.add(name)
         return sorted(filenames)
+
+    @property
+    def supports_working_tree(self):
+        """Always :data:`True` for Mercurial repositories."""
+        return True
 
     # Instance methods.
 

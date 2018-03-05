@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: July 2, 2017
+# Last Change: March 5, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Support for git version control repositories."""
@@ -147,6 +147,11 @@ class GitRepo(Repository):
             if metadata and name:
                 filenames.add(name)
         return sorted(filenames)
+
+    @property
+    def supports_working_tree(self):
+        """The opposite of :attr:`bare` (a boolean)."""
+        return not self.is_bare
 
     # Instance methods.
 

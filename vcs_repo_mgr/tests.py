@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: January 20, 2018
+# Last Change: March 5, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Test suite for the `vcs-repo-mgr` package."""
@@ -45,6 +45,7 @@ from vcs_repo_mgr.cli import main
 from vcs_repo_mgr.exceptions import (
     AmbiguousRepositoryNameError,
     MergeConflictError,
+    MissingWorkingTreeError,
     NoMatchingReleasesError,
     NoSuchRepositoryError,
     UnknownRepositoryTypeError,
@@ -930,14 +931,25 @@ class BackendTestCase(object):
             # Check the `bare' and `is_bare' properties.
             assert repository.bare is False
             assert repository.is_bare is False
+            # Check `ensure_working_tree' and `supports_working_tree'.
+            repository.ensure_working_tree()
 
     def test_working_tree_absent(self):
         """Test that repositories can be created without a working tree."""
         with TemporaryDirectory() as directory:
+            # Create a bare repository.
             repository = self.get_instance(bare=True, local=directory)
             repository.create()
             assert repository.bare is True
             assert repository.is_bare is True
+            # Check `ensure_working_tree' and `supports_working_tree'. We
+            # can't use assertRaises() here because Mercurial repositories
+            # always support a working tree, this explains why we just call
+            # ensure_working_tree() and swallow the one expected exception.
+            try:
+                repository.ensure_working_tree()
+            except MissingWorkingTreeError:
+                pass
 
 
 class BzrTestCase(BackendTestCase, TestCase):

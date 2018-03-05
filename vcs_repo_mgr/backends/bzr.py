@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: July 2, 2017
+# Last Change: March 5, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Support for Bazaar version control repositories."""
@@ -111,6 +111,11 @@ class BzrRepo(Repository):
                 roles=['push', 'pull'],
             ))
         return objects
+
+    @property
+    def supports_working_tree(self):
+        """The opposite of :attr:`bare` (a boolean)."""
+        return not self.is_bare
 
     # Instance methods.
 
