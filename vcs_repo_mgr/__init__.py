@@ -1263,7 +1263,7 @@ class Repository(PropertyManager):
         timer = Timer()
         revision = revision or self.default_revision
         logger.info("Exporting revision '%s' in %s to %s ..", revision, format_path(self.local), directory)
-        self.context.execute('mkdir', '--parents', directory)
+        self.context.execute('mkdir', '-p', directory)
         self.context.execute(*self.get_export_command(directory, revision))
         logger.debug("Took %s to pull changes from remote %s repository.", timer, self.friendly_name)
 
