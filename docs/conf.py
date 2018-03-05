@@ -30,8 +30,8 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = u'vcs-repo-mgr'
-copyright = u'2017, Peter Odding'
+project = 'vcs-repo-mgr'
+copyright = '2018, Peter Odding'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -73,6 +73,3 @@ intersphinx_mapping = {
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 html_theme = 'nature'
-
-# Output file base name for HTML help builder.
-htmlhelp_basename = 'vcsrepomgrdoc'
