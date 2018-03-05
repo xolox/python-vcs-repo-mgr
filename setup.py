@@ -3,7 +3,7 @@
 # Setup script for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: April 29, 2017
+# Last Change: March 5, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -31,19 +31,6 @@ from setuptools import find_packages, setup
 PY2 = (sys.version_info[0] == 2)
 """:data:`True` on Python 2, :data:`False` otherwise."""
 
-PYTHON_TWO_DEPS = ['bzr >= 2.6.0', 'mercurial >= 2.9']
-"""
-The `vcs-repo-mgr` package depends on Bazaar and Mercurial which don't support
-Python 3 (at the time of writing) while `vcs-repo-mgr` does support Python 3.
-
-On the one hand it's nice to pull in recent versions of these dependencies as
-installation requirements when possible, it definitely shouldn't make it
-impossible to install `vcs-repo-mgr` under Python 3. Because of this the Bazaar
-and Mercurial dependencies are conditional; users that are running Python 3 are
-expected to install Bazaar and/or Mercurial via e.g. their system package
-manager.
-"""
-
 
 def get_contents(*args):
     """Get the contents of a file relative to the source distribution directory."""
@@ -59,19 +46,29 @@ def get_version(*args):
 
 
 def get_install_requires():
-    """Add conditional dependencies for Python 2 (when creating source distributions)."""
+    """Add conditional dependencies (when creating source distributions)."""
     install_requires = get_requirements('requirements.txt')
-    if PY2 and 'bdist_wheel' not in sys.argv:
-        install_requires.extend(PYTHON_TWO_DEPS)
+    if 'bdist_wheel' not in sys.argv:
+        if sys.version_info[0] == 2:
+            # On Python 2.6 and 2.7 we pull in Bazaar.
+            install_requires.append('bzr >= 2.6.0')
+        if sys.version_info[2:] == (2, 6):
+            # On Python 2.6 we have to stick to versions of Mercurial below 4.3
+            # because 4.3 drops support for Python 2.6, see the change log:
+            # https://www.mercurial-scm.org/wiki/WhatsNew
+            install_requires.append('mercurial >= 2.9, < 4.3')
+        elif (2, 6) < sys.version_info[:2] < (3, 0):
+            # On Python 2.7 we pull in Mercurial.
+            install_requires.append('mercurial >= 2.9')
     return sorted(install_requires)
 
 
 def get_extras_require():
-    """Add conditional dependencies for Python 2 (when creating wheel distributions)."""
+    """Add conditional dependencies (when creating wheel distributions)."""
     extras_require = {}
     if have_environment_marker_support():
-        expression = ':python_version == "2.6" or python_version == "2.7"'
-        extras_require[expression] = list(PYTHON_TWO_DEPS)
+        extras_require[':python_version == "2.6"'] = ['bzr >= 2.6.0', 'mercurial >= 2.9, < 4.3']
+        extras_require[':python_version == "2.7"'] = ['bzr >= 2.6.0', 'mercurial >= 2.9']
     return extras_require
 
 
