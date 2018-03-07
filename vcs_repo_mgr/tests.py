@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 5, 2018
+# Last Change: March 7, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Test suite for the `vcs-repo-mgr` package."""
@@ -459,6 +459,41 @@ class BackendTestCase(object):
             target.create()
             # Check that our initial commit made it into the target repository.
             assert target.find_revision_id() == initial_commit
+
+    def test_clone_all_branches(self):
+        """
+        Test that cloning of repositories copies all branches.
+
+        This is a regression test for https://github.com/xolox/python-vcs-repo-mgr/issues/4.
+        """
+        branch_names = ['v1', 'v2', 'v3', 'v4', 'v5']
+        with TemporaryDirectory() as directory:
+            # Create a source (upstream) repository with multiple branches.
+            source = self.get_instance(local=os.path.join(directory, 'source'), bare=False)
+            for name in branch_names:
+                source.create_branch(name)
+                self.commit_file(
+                    repository=source,
+                    filename='VERSION',
+                    contents=name,
+                )
+            # Sanity check the source repository.
+            for name in branch_names:
+                assert name in source.branches
+            # Create the target repository by cloning the source repository.
+            target = self.get_instance(
+                local=os.path.join(directory, 'target'),
+                remote=source.local,
+                # It's important that the target repository is not bare,
+                # because the issue reported involved a fresh git clone with a
+                # working tree not reporting the same available branches (the
+                # same behavior didn't manifest in a bare git repository).
+                bare=False,
+            )
+            target.create()
+            # Sanity check the target repository.
+            for name in branch_names:
+                assert name in target.branches
 
     def test_coerce_repository(self):
         """Test :func:`vcs_repo_mgr.coerce_repository()`."""
