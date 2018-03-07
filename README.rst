@@ -10,7 +10,8 @@ vcs-repo-mgr: Version control repository manager
 The Python package `vcs-repo-mgr` provides a command line program and Python
 API to perform common operations (in the context of packaging/deployment) on
 `version control`_ repositories. It's currently tested on Python 2.6, 2.7, 3.4,
-3.5 and 3.6. Bazaar_, Mercurial_ and Git_ repositories are supported.
+3.5 and 3.6 on Linux and Mac OS X. Bazaar_, Mercurial_ and Git_ repositories
+are supported.
 
 .. contents::
    :local:

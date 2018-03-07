@@ -3,7 +3,7 @@
 # Setup script for the `vcs-repo-mgr' package.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 5, 2018
+# Last Change: March 8, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -135,7 +135,9 @@ setup(name='vcs-repo-mgr',
           'Intended Audience :: Information Technology',
           'Intended Audience :: System Administrators',
           'License :: OSI Approved :: MIT License',
+          'Operating System :: MacOS :: MacOS X',
           'Operating System :: POSIX',
+          'Operating System :: POSIX :: Linux',
           'Operating System :: Unix',
           'Programming Language :: Python',
           'Programming Language :: Python :: 2',
