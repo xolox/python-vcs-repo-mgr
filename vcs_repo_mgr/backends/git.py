@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 5, 2018
+# Last Change: March 7, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Support for git version control repositories."""
@@ -9,6 +9,7 @@
 # Standard library modules.
 import logging
 import os
+import re
 
 # External dependencies.
 from executor import quote
@@ -26,6 +27,10 @@ __all__ = (
 
 # Initialize a logger for this module.
 logger = logging.getLogger(__name__)
+
+# A compiled regular expression pattern to match branch names in
+# the output of the 'git for-each-ref --format=%(refname)' command.
+REFNAME_TO_BRANCH = re.compile('^refs/heads/(.+)|refs/remotes/[^/]+/(.+)$')
 
 
 class GitRepo(Repository):
@@ -162,17 +167,19 @@ class GitRepo(Repository):
 
     def find_branches(self):
         """Find information about the branches in the repository."""
-        listing = self.context.capture('git', 'branch', '--list', '--verbose')
+        listing = self.context.capture('git', 'for-each-ref', '--format=%(refname)\t%(objectname)')
         for line in listing.splitlines():
-            line = line.lstrip('*').strip()
-            if not line.startswith('(no branch)'):
-                tokens = line.split()
-                if len(tokens) >= 2:
-                    yield Revision(
-                        branch=tokens[0],
-                        repository=self,
-                        revision_id=tokens[1],
-                    )
+            tokens = line.split('\t')
+            if len(tokens) == 2:
+                match = REFNAME_TO_BRANCH.match(tokens[0])
+                if match:
+                    name = next(g for g in match.groups() if g)
+                    if name != 'HEAD':
+                        yield Revision(
+                            branch=name,
+                            repository=self,
+                            revision_id=tokens[1],
+                        )
 
     def find_revision_id(self, revision=None):
         """Find the global revision id of the given revision."""
