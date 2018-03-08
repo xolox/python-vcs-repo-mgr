@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 7, 2018
+# Last Change: March 8, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Test suite for the `vcs-repo-mgr` package."""
@@ -464,7 +464,11 @@ class BackendTestCase(object):
         """
         Test that cloning of repositories copies all branches.
 
-        This is a regression test for https://github.com/xolox/python-vcs-repo-mgr/issues/4.
+        This is a regression test for two bugs, the first of which was reported
+        in `issue 4`_ and the second of which is documented in `issue 5`_.
+
+        .. _issue 4: https://github.com/xolox/python-vcs-repo-mgr/issues/4
+        .. _issue 5: https://github.com/xolox/python-vcs-repo-mgr/issues/5
         """
         branch_names = ['v1', 'v2', 'v3', 'v4', 'v5']
         with TemporaryDirectory() as directory:
@@ -494,6 +498,9 @@ class BackendTestCase(object):
             # Sanity check the target repository.
             for name in branch_names:
                 assert name in target.branches
+                # The bug in issue 5 would cause an ExternalCommandFailed
+                # exception to be raised on the following line.
+                assert target.find_revision_id(name)
 
     def test_coerce_repository(self):
         """Test :func:`vcs_repo_mgr.coerce_repository()`."""
