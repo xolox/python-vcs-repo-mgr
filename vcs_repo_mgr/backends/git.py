@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 7, 2018
+# Last Change: March 8, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Support for git version control repositories."""
@@ -28,9 +28,13 @@ __all__ = (
 # Initialize a logger for this module.
 logger = logging.getLogger(__name__)
 
-# A compiled regular expression pattern to match branch names in
-# the output of the 'git for-each-ref --format=%(refname)' command.
-REFNAME_TO_BRANCH = re.compile('^refs/heads/(.+)|refs/remotes/[^/]+/(.+)$')
+# A compiled regular expression pattern to parse the output of the
+# 'git for-each-ref --format=%(refname)\t%(objectname)' command.
+FOR_EACH_REF_PATTERN = re.compile(r'''
+  ^ (?P<prefix> refs/ ( heads | remotes/[^/]+ ) / )
+    (?P<name> [^\t]+ ) \t
+    (?P<revision_id> [0-9A-Fa-f]+ ) $
+''', re.VERBOSE)
 
 
 class GitRepo(Repository):
@@ -160,6 +164,47 @@ class GitRepo(Repository):
 
     # Instance methods.
 
+    def expand_branch_name(self, name):
+        """
+        Expand branch names to their unambiguous form.
+
+        :param name: The name of a local or remote branch (a string).
+        :returns: The unambiguous form of the branch name (a string).
+
+        This internal method is used by methods like :func:`find_revision_id()`
+        and :func:`find_revision_number()` to detect and expand remote branch
+        names into their unambiguous form which is accepted by commands like
+        ``git rev-parse`` and ``git rev-list --count``.
+        """
+        # If no name is given we pick the default revision.
+        if not name:
+            return self.default_revision
+        # Run `git for-each-ref' once and remember the results.
+        branches = list(self.find_branches_raw())
+        # Check for an exact match against a local branch.
+        for prefix, other_name, revision_id in branches:
+            if prefix == 'refs/heads/' and name == other_name:
+                # If we find a local branch whose name exactly matches the name
+                # given by the caller then we consider the argument given by
+                # the caller unambiguous.
+                logger.debug("Branch name %r matches local branch.", name)
+                return name
+        # Check for an exact match against a remote branch.
+        for prefix, other_name, revision_id in branches:
+            if prefix.startswith('refs/remotes/') and name == other_name:
+                # If we find a remote branch whose name exactly matches the
+                # name given by the caller then we expand the name given by the
+                # caller into the full %(refname) emitted by `git for-each-ref'.
+                unambiguous_name = prefix + name
+                logger.debug("Branch name %r matches remote branch %r.", name, unambiguous_name)
+                return unambiguous_name
+        # As a fall back we return the given name without expanding it.
+        # This code path might not be necessary but was added out of
+        # conservativeness, with the goal of trying to guarantee
+        # backwards compatibility.
+        logger.debug("Failed to expand branch name %r.", name)
+        return name
+
     def find_author(self):
         """Get the author information from the version control system."""
         return Author(name=self.context.capture('git', 'config', 'user.name', check=False, silent=True),
@@ -167,26 +212,29 @@ class GitRepo(Repository):
 
     def find_branches(self):
         """Find information about the branches in the repository."""
+        for prefix, name, revision_id in self.find_branches_raw():
+            yield Revision(
+                branch=name,
+                repository=self,
+                revision_id=revision_id,
+            )
+
+    def find_branches_raw(self):
+        """Find information about the branches in the repository."""
         listing = self.context.capture('git', 'for-each-ref', '--format=%(refname)\t%(objectname)')
         for line in listing.splitlines():
-            tokens = line.split('\t')
-            if len(tokens) == 2:
-                match = REFNAME_TO_BRANCH.match(tokens[0])
-                if match:
-                    name = next(g for g in match.groups() if g)
-                    if name != 'HEAD':
-                        yield Revision(
-                            branch=name,
-                            repository=self,
-                            revision_id=tokens[1],
-                        )
+            match = FOR_EACH_REF_PATTERN.match(line)
+            if match and match.group('name') != 'HEAD':
+                yield (match.group('prefix'),
+                       match.group('name'),
+                       match.group('revision_id'))
 
     def find_revision_id(self, revision=None):
         """Find the global revision id of the given revision."""
         # Make sure the local repository exists.
         self.create()
         # Try to find the revision id of the specified revision.
-        revision = revision or self.default_revision
+        revision = self.expand_branch_name(revision)
         output = self.context.capture('git', 'rev-parse', revision)
         # Validate the `git rev-parse' output.
         return self.ensure_hexadecimal_string(output, 'git rev-parse')
@@ -196,7 +244,7 @@ class GitRepo(Repository):
         # Make sure the local repository exists.
         self.create()
         # Try to find the revision number of the specified revision.
-        revision = revision or self.default_revision
+        revision = self.expand_branch_name(revision)
         output = self.context.capture('git', 'rev-list', revision, '--count')
         if not (output and output.isdigit()):
             msg = "Failed to find local revision number! ('git rev-list --count' gave unexpected output)"
