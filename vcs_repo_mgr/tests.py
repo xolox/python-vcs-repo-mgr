@@ -591,6 +591,10 @@ class BackendTestCase(object):
     def test_export(self):
         """Test exporting of revisions."""
         with TemporaryDirectory() as directory:
+            # Change the current working directory to our temporary directory
+            # so that we can give a relative pathname to export(). This is a
+            # regression test for a bug to be fixed in vcs-repo-mgr 4.1.3.
+            os.chdir(directory)
             # Initialize a repository object of the parametrized type.
             repository = self.get_instance(bare=False, local=os.path.join(directory, 'repo'))
             repository.create()
@@ -604,17 +608,20 @@ class BackendTestCase(object):
                 message="Initial commit",
             )
             # Export the initial revision.
-            export_directory = os.path.join(directory, 'export')
+            export_directory_relative = 'export'
+            export_directory_absolute = os.path.join(directory, export_directory_relative)
             returncode, output = run_cli(
                 main, '--repository=%s' % repository.local,
-                '--export=%s' % export_directory,
+                '--export=%s' % export_directory_relative,
             )
             self.assertEquals(returncode, 0)
             # Check that the file we committed was exported.
-            exported_file = os.path.join(export_directory, versioned_filename)
+            exported_file = os.path.join(export_directory_absolute, versioned_filename)
             self.assertTrue(os.path.isfile(exported_file))
             with codecs.open(exported_file, 'r', 'UTF-8') as handle:
                 self.assertEquals(handle.read(), versioned_contents)
+            # Reset the working directory.
+            os.chdir(tempfile.gettempdir())
 
     def test_find_revision_number(self):
         """Test querying the command line interface for local revision numbers."""
