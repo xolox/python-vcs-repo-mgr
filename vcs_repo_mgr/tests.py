@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 8, 2018
+# Last Change: March 28, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """Test suite for the `vcs-repo-mgr` package."""
@@ -73,14 +73,29 @@ def prepare_config(config):
 
 
 def setUpModule():
-    """Create a temporary ``$HOME`` directory."""
+    """
+    Create a temporary ``$HOME`` directory (and use it as a working directory).
+
+    Rationale:
+
+    - The vcs-repo-mgr test suite ignores ``$HOME`` to avoid unintended
+      interactions with local user preferences like automatic GPG signing by
+      git (which the author of vcs-repo-mgr has enabled via ``~/.gitconfig``).
+
+    - The fake ``$HOME`` directory is used as a working directory so that the
+      vcs-repo-mgr doesn't run with the vcs-repo-mgr git repository as its
+      working directory. That used to be the case and obscured a programming
+      error that will be fixed in vcs-repo-mgr 4.1.2.
+    """
     pathname = tempfile.mkdtemp()
     TEMPORARY_DIRECTORIES.append(pathname)
     os.environ['HOME'] = pathname
+    os.chdir(pathname)
 
 
 def tearDownModule():
     """Cleanup the temporary ``$HOME`` directory."""
+    os.chdir(tempfile.gettempdir())
     while TEMPORARY_DIRECTORIES:
         shutil.rmtree(TEMPORARY_DIRECTORIES.pop(0))
     os.environ['HOME'] = ''
