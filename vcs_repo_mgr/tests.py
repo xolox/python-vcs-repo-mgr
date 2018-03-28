@@ -83,9 +83,9 @@ def setUpModule():
       git (which the author of vcs-repo-mgr has enabled via ``~/.gitconfig``).
 
     - The fake ``$HOME`` directory is used as a working directory so that the
-      vcs-repo-mgr doesn't run with the vcs-repo-mgr git repository as its
-      working directory. That used to be the case and obscured a programming
-      error that will be fixed in vcs-repo-mgr 4.1.2.
+      vcs-repo-mgr test suite doesn't run with the vcs-repo-mgr git repository
+      as its working directory. That used to be the case and obscured a
+      programming error that was fixed in vcs-repo-mgr 4.1.2.
     """
     pathname = tempfile.mkdtemp()
     TEMPORARY_DIRECTORIES.append(pathname)
