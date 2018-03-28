@@ -593,7 +593,7 @@ class BackendTestCase(object):
         with TemporaryDirectory() as directory:
             # Change the current working directory to our temporary directory
             # so that we can give a relative pathname to export(). This is a
-            # regression test for a bug to be fixed in vcs-repo-mgr 4.1.3.
+            # regression test for a bug that was fixed in vcs-repo-mgr 4.1.3.
             os.chdir(directory)
             # Initialize a repository object of the parametrized type.
             repository = self.get_instance(bare=False, local=os.path.join(directory, 'repo'))
