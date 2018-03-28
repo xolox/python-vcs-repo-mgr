@@ -1274,6 +1274,10 @@ class Repository(PropertyManager):
         :param revision: The revision to export (a string or :data:`None`,
                          defaults to :attr:`default_revision`).
         """
+        # Make sure we're dealing with an absolute pathname (because a relative
+        # pathname would be interpreted as relative to the repository's main
+        # directory, which isn't necessarily what the caller expects).
+        directory = os.path.abspath(directory)
         # Make sure the local repository exists.
         self.create()
         # Export the tree from the local repository.
