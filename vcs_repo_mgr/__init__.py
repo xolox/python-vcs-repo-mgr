@@ -1,7 +1,7 @@
 # Version control system repository manager.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: March 8, 2018
+# Last Change: March 28, 2018
 # URL: https://github.com/xolox/python-vcs-repo-mgr
 
 """
@@ -1000,6 +1000,8 @@ class Repository(PropertyManager):
         # Make sure the caller specified at least the local *or* remote.
         if not (self.local or self.remote):
             raise ValueError("No local and no remote repository specified! (one of the two is required)")
+        # Ensure that all further commands are executed in the local repository.
+        self.update_context()
         # Abort if the caller's preference for the existence of a working
         # tree doesn't match the state of an existing local repository.
         if self.exists and self.bare != self.is_bare:
@@ -1013,8 +1015,6 @@ class Repository(PropertyManager):
                 actual_state=("doesn't" if self.is_bare else "does"),
                 location=format_path(self.local),
             ))
-        # Ensure that all further commands are executed in the local repository.
-        self.update_context()
 
     def add_files(self, *filenames, **kw):
         """
