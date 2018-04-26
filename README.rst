@@ -324,9 +324,11 @@ setup script full of nasty and fragile hacks I'd rather just drop official
 Contact
 -------
 
-The latest version of `vcs-repo-mgr` is available on PyPI_ and GitHub_. For
-bug reports please create an issue on GitHub_. If you have questions,
-suggestions, etc. feel free to send me an e-mail at `peter@peterodding.com`_.
+The latest version of `vcs-repo-mgr` is available on PyPI_ and GitHub_. The
+documentation is hosted on `Read the Docs`_ and includes a changelog_. For bug
+reports please create an issue on GitHub_. If you have questions, suggestions,
+etc. feel free to send me an e-mail at `peter@peterodding.com`_.
+
 
 License
 -------
@@ -337,15 +339,16 @@ This software is licensed under the `MIT license`_.
 
 .. External references:
 .. _Bazaar: http://bazaar.canonical.com/en/
-.. _executor.contexts: http://executor.readthedocs.org/en/latest/#module-executor.contexts
+.. _changelog: https://vcs-repo-mgr.readthedocs.org/en/latest/changelog.html
+.. _executor.contexts: http://executor.readthedocs.org/en/latest/api.html#module-executor.contexts
 .. _Git: http://git-scm.com/
 .. _GitHub: https://github.com/xolox/python-vcs-repo-mgr
 .. _Mercurial: http://mercurial.selenic.com/
 .. _MIT license: http://en.wikipedia.org/wiki/MIT_License
-.. _online documentation: https://vcs-repo-mgr.readthedocs.org/en/latest/#function-reference
+.. _online documentation: https://vcs-repo-mgr.readthedocs.org/en/latest/
 .. _per user site-packages directory: https://www.python.org/dev/peps/pep-0370/
 .. _peter@peterodding.com: peter@peterodding.com
 .. _PyPI: https://pypi.python.org/pypi/vcs-repo-mgr
-.. _Read the Docs: https://vcs-repo-mgr.readthedocs.org/en/latest/#function-reference
+.. _Read the Docs: https://vcs-repo-mgr.readthedocs.org/en/latest/
 .. _version control: http://en.wikipedia.org/wiki/Revision_control
 .. _virtual environments: http://docs.python-guide.org/en/latest/dev/virtualenvs/

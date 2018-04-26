@@ -1,52 +1,33 @@
-.. include:: ../README.rst
+vcs-repo-mgr: Version control repository manager
+================================================
 
-Function reference
-------------------
-
-The following documentation is based on the source code of version |release| of
-the ``vcs-repo-mgr`` package.
+Welcome to the documentation of `vcs-repo-mgr` version |release|! The following
+sections are available:
 
 .. contents::
    :local:
 
-:mod:`vcs_repo_mgr`
-~~~~~~~~~~~~~~~~~~~
+User documentation
+------------------
 
-.. automodule:: vcs_repo_mgr
-   :members:
+The readme is the best place to start reading, it's targeted at all users and
+documents the command line interface:
 
-:mod:`vcs_repo_mgr.backends`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. toctree::
+   readme.rst
 
-.. automodule:: vcs_repo_mgr.backends
-   :members:
+API documentation
+-----------------
 
-:mod:`vcs_repo_mgr.backends.bzr`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The following API documentation is automatically generated from the source code:
 
-.. automodule:: vcs_repo_mgr.backends.bzr
-   :members:
+.. toctree::
+   api.rst
 
-:mod:`vcs_repo_mgr.backends.git`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Change log
+----------
 
-.. automodule:: vcs_repo_mgr.backends.git
-   :members:
+The change log lists notable changes to the project:
 
-:mod:`vcs_repo_mgr.backends.hg`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. automodule:: vcs_repo_mgr.backends.hg
-   :members:
-
-:mod:`vcs_repo_mgr.cli`
-~~~~~~~~~~~~~~~~~~~~~~~
-
-.. automodule:: vcs_repo_mgr.cli
-   :members:
-
-:mod:`vcs_repo_mgr.exceptions`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. automodule:: vcs_repo_mgr.exceptions
-   :members:
+.. toctree::
+   changelog.rst
